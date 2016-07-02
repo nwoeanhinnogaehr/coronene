@@ -1,3 +1,8 @@
+mod player;
+
+use player::graph::{Graph, NodeRef};
+
 fn main() {
-    println!("Hello, world!");
+    let g = Graph::new(NodeRef::new("Hello, world!")).root();
+    println!("{}", g.node().data);
 }
