@@ -1,18 +1,15 @@
 mod player;
 
-use player::graph::{Graph, NodeRef};
-use player::board::{Board, Cell};
+use player::graph::{NodeRef};
+use player::board::{Board, Color, Move};
 
 fn main() {
-    let g = Graph::new(NodeRef::new("Hello, world!")).root();
-    println!("{}", g.node().data);
+    let mut g = NodeRef::new_root();
+    for i in 0..13 {
+        g = g.add_child(NodeRef::new(Move::new(Color::Black, (i, i))));
+    }
 
-    let mut b = Board::new(9, 9);
-    b[(0, 0)] = Cell::Black;
-    b[(8, 8)] = Cell::Black;
-    b[(1, 2)] = Cell::White;
-    b[(2, 3)] = Cell::White;
-    b[(2, 4)] = Cell::Black;
-    b[(3, 3)] = Cell::Black;
+    let mut b = Board::new(13, 13);
+    g.fill_board(&mut b);
     println!("{}", b);
 }
