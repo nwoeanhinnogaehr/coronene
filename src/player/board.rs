@@ -1,11 +1,23 @@
 use std::ops::{Index, IndexMut};
 use super::graph::NodeRef;
 use std::fmt;
+use std::str::FromStr;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Color {
     Black,
     White,
+}
+
+impl FromStr for Color {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().chars().next() {
+            Some('b') => Ok(Color::Black),
+            Some('w') => Ok(Color::White),
+            _ => Err(())
+        }
+    }
 }
 
 impl fmt::Display for Color {
@@ -17,7 +29,7 @@ impl fmt::Display for Color {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Cell {
     Empty,
     Black,
@@ -55,21 +67,23 @@ impl Pos {
     pub fn new(x: Coord, y: Coord) -> Pos {
         Pos { x: x, y: y }
     }
+}
 
-    pub fn parse(s: &str) -> Option<Pos> {
+impl FromStr for Pos {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.to_lowercase();
         let b = s.as_bytes();
         let x = if b[0] >= b'a' && b[0] <= b'z' {
             b[0] - b'a'
-        } else if b[0] >= b'A' && b[0] <= b'Z' {
-            b[0] - b'A'
         } else {
-            return None;
+            return Err(());
         };
         let y = match s[1..].parse::<Coord>() {
             Ok(y) => y - 1,
-            Err(_) => return None,
+            Err(_) => return Err(()),
         };
-        Some(Pos::new(x, y))
+        Ok(Pos::new(x, y))
     }
 }
 
@@ -81,7 +95,7 @@ impl From<(Coord, Coord)> for Pos {
 
 impl<'a> From<&'a str> for Pos {
     fn from(s: &'a str) -> Pos {
-        Pos::parse(s).expect("position parse failed")
+        s.parse().expect("position parse failed")
     }
 }
 
@@ -135,6 +149,22 @@ impl Board {
 
     pub fn rows(&self) -> Coord {
         self.rows
+    }
+
+    pub fn is_empty<P>(&self, pos: P) -> bool where P: Into<Pos> {
+        self[pos] == Cell::Empty
+    }
+
+    pub fn empty_cells(&self) -> Vec<Pos> {
+        let mut cells = Vec::new();
+        for x in 0..self.cols() {
+            for y in 0..self.rows() {
+                if self.is_empty((x, y)) {
+                    cells.push((x, y).into());
+                }
+            }
+        }
+        cells
     }
 
     fn idx_of(&self, pos: Pos) -> Option<usize> {

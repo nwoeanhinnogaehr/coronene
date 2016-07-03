@@ -1,15 +1,16 @@
+#![feature(slice_patterns)]
+
+extern crate rand;
+
 mod player;
 
-use player::graph::{NodeRef};
-use player::board::{Board, Color, Move};
+use player::htp::HTP;
+use player::RandomPlayer;
+use std::io;
 
 fn main() {
-    let mut g = NodeRef::new_root();
-    for i in 0..13 {
-        g = g.add_child(NodeRef::new(Move::new(Color::Black, (i, i))));
-    }
-
-    let mut b = Board::new(13, 13);
-    g.fill_board(&mut b);
-    println!("{}", b);
+    let player = RandomPlayer::new(13, 13);
+    let (stdin, stdout) = (io::stdin(), io::stdout());
+    let htp = HTP::new(stdin.lock(), stdout.lock());
+    htp.run(player);
 }
