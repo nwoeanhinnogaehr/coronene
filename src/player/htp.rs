@@ -42,11 +42,11 @@ impl<R, W> HTP<R, W>
         self.listen(move |cmd_str| {
             let words = cmd_str.split_whitespace();
             let command = match words.collect::<Vec<&str>>()[..] {
-                ["genmove", color, ..] => {
+                ["genmove", color] => {
                     let color = try!(color.parse().map_err(|_| "invalid color"));
                     Ok(format!("{}", player.generate_move(color).pos))
                 }
-                ["play", color, pos, ..] => {
+                ["play", color, pos] => {
                     let color = try!(color.parse().map_err(|_| "invalid color"));
                     let pos = try!(pos.parse::<Pos>().map_err(|_| "invalid move"));
                     player.play_move(Move::new(color, pos));
