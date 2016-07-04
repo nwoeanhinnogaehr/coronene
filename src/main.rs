@@ -11,6 +11,6 @@ use std::io;
 fn main() {
     let player = RandomPlayer::new();
     let (stdin, stdout) = (io::stdin(), io::stdout());
-    let htp = HTP::new(stdin.lock(), stdout.lock());
+    let mut htp = HTP::new(stdin.lock(), stdout.lock());
     htp.run(player);
 }
