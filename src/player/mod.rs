@@ -11,6 +11,7 @@ pub trait Player {
     fn board(&self) -> &Board;
     fn name(&self) -> String;
     fn version(&self) -> String;
+    fn set_board_size(&mut self, cols: Coord, rows: Coord);
 }
 
 pub struct RandomPlayer {
@@ -19,9 +20,9 @@ pub struct RandomPlayer {
 }
 
 impl RandomPlayer {
-    pub fn new(cols: Coord, rows: Coord) -> RandomPlayer {
+    pub fn new() -> RandomPlayer {
         RandomPlayer {
-            board: Board::new(cols, rows),
+            board: Board::new(13, 13),
             rng: rand::thread_rng(),
         }
     }
@@ -48,5 +49,9 @@ impl Player for RandomPlayer {
     }
     fn version(&self) -> String {
         "0.000000000000001".into()
+    }
+
+    fn set_board_size(&mut self, cols: Coord, rows: Coord) {
+        self.board = Board::new(cols, rows);
     }
 }

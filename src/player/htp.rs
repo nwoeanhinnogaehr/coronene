@@ -62,11 +62,8 @@ impl<R, W> HTP<R, W>
                 ["boardsize", cols, rows] => {
                     let cols = try!(cols.parse::<Coord>().map_err(|_| "invalid size"));
                     let rows = try!(rows.parse::<Coord>().map_err(|_| "invalid size"));
-                    if player.board().cols() == cols && player.board().rows() == rows {
-                        Ok("".into())
-                    } else {
-                        Err("unsupportede boardsize")
-                    }
+                    player.set_board_size(cols, rows);
+                    Ok("".into())
                 }
                 ["quit"] => {
                     // quick hack fixme

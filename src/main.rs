@@ -9,7 +9,7 @@ use player::RandomPlayer;
 use std::io;
 
 fn main() {
-    let player = RandomPlayer::new(13, 13);
+    let player = RandomPlayer::new();
     let (stdin, stdout) = (io::stdin(), io::stdout());
     let htp = HTP::new(stdin.lock(), stdout.lock());
     htp.run(player);
