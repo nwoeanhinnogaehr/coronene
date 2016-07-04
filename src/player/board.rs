@@ -106,16 +106,20 @@ impl fmt::Display for Pos {
 }
 
 #[derive(Copy, Clone)]
-pub struct Move {
-    pub color: Color,
-    pub pos: Pos,
+pub enum Move {
+    Resign,
+    None,
+    Play {
+        color: Color,
+        pos: Pos,
+    },
 }
 
 impl Move {
     pub fn new<P>(color: Color, pos: P) -> Move
         where P: Into<Pos>
     {
-        Move {
+        Move::Play {
             color: color,
             pos: pos.into(),
         }
@@ -124,7 +128,11 @@ impl Move {
 
 impl fmt::Display for Move {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}@{}", self.color, self.pos)
+        match self {
+            &Move::Resign => write!(f, "resign"),
+            &Move::None => write!(f, "pass"),
+            &Move::Play { color: _, pos } => write!(f, "{}", pos),
+        }
     }
 }
 
@@ -160,11 +168,16 @@ impl Board {
     }
 
     pub fn play(&mut self, m: Move) -> bool {
-        if !self.is_empty(m.pos) {
-            false
-        } else {
-            self[m.pos] = m.color.into();
-            true
+        match m {
+            Move::Resign | Move::None => true,
+            Move::Play { color, pos } => {
+                if !self.is_empty(pos) {
+                    false
+                } else {
+                    self[pos] = color.into();
+                    true
+                }
+            }
         }
     }
 
@@ -248,9 +261,14 @@ impl<T> NodeRef<Option<T>>
         let node = self.node();
         match node.data() {
             &Some(ref data) => {
-                let data = data.clone().into();
-                board[data.pos] = data.color.into();
-                node.incoming()[0].fill_board(board);
+                let m = data.clone().into();
+                match m {
+                    Move::Resign | Move::None => {}
+                    Move::Play { color, pos } => {
+                        board[pos] = color.into();
+                        node.incoming()[0].fill_board(board);
+                    }
+                }
             }
             &None => {}
         }

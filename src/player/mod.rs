@@ -30,8 +30,11 @@ impl RandomPlayer {
 
 impl Player for RandomPlayer {
     fn generate_move(&mut self, color: Color) -> Move {
-        let pos = self.rng.choose(&self.board.empty_cells()).unwrap().clone();
-        let m = Move::new(color, pos);
+        let pos = self.rng.choose(&self.board.empty_cells()).cloned();
+        let m = match pos {
+            Some(pos) => Move::new(color, pos),
+            None => Move::Resign,
+        };
         self.play_move(m);
         m
     }

@@ -44,7 +44,7 @@ impl<R, W> HTP<R, W>
             let command = match words.collect::<Vec<&str>>()[..] {
                 ["genmove", color] => {
                     let color = try!(color.parse().map_err(|_| "invalid color"));
-                    Ok(format!("{}", player.generate_move(color).pos))
+                    Ok(format!("{}", player.generate_move(color)))
                 }
                 ["play", color, pos] => {
                     let color = try!(color.parse().map_err(|_| "invalid color"));
