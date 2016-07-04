@@ -15,7 +15,7 @@ impl FromStr for Color {
         match s.to_lowercase().chars().next() {
             Some('b') => Ok(Color::Black),
             Some('w') => Ok(Color::White),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }
@@ -112,10 +112,12 @@ pub struct Move {
 }
 
 impl Move {
-    pub fn new<P>(color: Color, pos: P) -> Move where P: Into<Pos> {
+    pub fn new<P>(color: Color, pos: P) -> Move
+        where P: Into<Pos>
+    {
         Move {
             color: color,
-            pos: pos.into()
+            pos: pos.into(),
         }
     }
 }
@@ -151,7 +153,9 @@ impl Board {
         self.rows
     }
 
-    pub fn is_empty<P>(&self, pos: P) -> bool where P: Into<Pos> {
+    pub fn is_empty<P>(&self, pos: P) -> bool
+        where P: Into<Pos>
+    {
         self[pos] == Cell::Empty
     }
 
@@ -226,16 +230,20 @@ impl fmt::Display for Board {
     }
 }
 
-impl<T> NodeRef<T>
+impl<T> NodeRef<Option<T>>
     where T: Into<Move> + Clone
 {
     /// Given a node and a board, follow the first parent of each node up to the root, filling in
     /// the move for each node on the board.
     pub fn fill_board(&self, board: &mut Board) {
         let node = self.node();
-        if !node.is_root() {
-            board[node.data().clone().into().pos] = node.data().clone().into().color.into();
-            node.incoming()[0].fill_board(board);
+        match node.data() {
+            &Some(ref data) => {
+                let data = data.clone().into();
+                board[data.pos] = data.color.into();
+                node.incoming()[0].fill_board(board);
+            }
+            &None => {}
         }
     }
 }

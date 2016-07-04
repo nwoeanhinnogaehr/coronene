@@ -2,13 +2,13 @@ use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::ops::Deref;
 
 pub struct Node<T: Clone> {
-    data: Option<T>,
+    data: T,
     incoming: Vec<NodeRef<T>>,
     outgoing: Vec<NodeRef<T>>,
 }
 
 impl<T: Clone> Node<T> {
-    fn new(data: Option<T>) -> Node<T> {
+    fn new(data: T) -> Node<T> {
         Node {
             data: data,
             incoming: Vec::new(),
@@ -24,16 +24,12 @@ impl<T: Clone> Node<T> {
         &self.outgoing
     }
 
-    pub fn is_root(&self) -> bool {
-        self.data.is_none()
-    }
-
     pub fn data(&self) -> &T {
-        self.data.as_ref().expect("root has no data")
+        &self.data
     }
 
     pub fn data_mut(&mut self) -> &mut T {
-        self.data.as_mut().expect("root has no data")
+        &mut self.data
     }
 }
 
@@ -49,11 +45,7 @@ impl<T: Clone> Deref for NodeRef<T> {
 
 impl<T: Clone> NodeRef<T> {
     pub fn new(data: T) -> NodeRef<T> {
-        NodeRef(Arc::new(RwLock::new(Node::new(Some(data)))))
-    }
-
-    pub fn new_root() -> NodeRef<T> {
-        NodeRef(Arc::new(RwLock::new(Node::new(None))))
+        NodeRef(Arc::new(RwLock::new(Node::new(data))))
     }
 
     pub fn add_child(&self, child: NodeRef<T>) -> NodeRef<T> {

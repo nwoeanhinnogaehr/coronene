@@ -52,18 +52,10 @@ impl<R, W> HTP<R, W>
                     player.play_move(Move::new(color, pos));
                     Ok("".into())
                 }
-                ["showboard"] => {
-                    Ok(format!("\n{}", player.board()))
-                }
-                ["name"] => {
-                    Ok(player.name())
-                }
-                ["version"] => {
-                    Ok(player.version())
-                }
-                ["hexgui-analyze_commands"] => {
-                    Ok("".into())
-                }
+                ["showboard"] => Ok(format!("\n{}", player.board())),
+                ["name"] => Ok(player.name()),
+                ["version"] => Ok(player.version()),
+                ["hexgui-analyze_commands"] => Ok("".into()),
                 ["boardsize", cols, rows] => {
                     let cols = try!(cols.parse::<Coord>().map_err(|_| "invalid size"));
                     let rows = try!(rows.parse::<Coord>().map_err(|_| "invalid size"));
@@ -74,7 +66,7 @@ impl<R, W> HTP<R, W>
                     }
                 }
                 ["quit"] => {
-                    //quick hack fixme
+                    // quick hack fixme
                     let stdout = io::stdout();
                     write!(stdout.lock(), "= \n\n").unwrap();
                     process::exit(0);
