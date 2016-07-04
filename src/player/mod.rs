@@ -7,7 +7,7 @@ use rand::{self, ThreadRng, Rng};
 
 pub trait Player {
     fn generate_move(&mut self, color: Color) -> Move;
-    fn play_move(&mut self, m: Move);
+    fn play_move(&mut self, m: Move) -> bool;
     fn board(&self) -> &Board;
     fn name(&self) -> String;
     fn version(&self) -> String;
@@ -35,8 +35,8 @@ impl Player for RandomPlayer {
         m
     }
 
-    fn play_move(&mut self, m: Move) {
-        self.board[m.pos] = m.color.into();
+    fn play_move(&mut self, m: Move) -> bool {
+        return self.board.play(m);
     }
 
     fn board(&self) -> &Board {

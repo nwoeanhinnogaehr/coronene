@@ -49,8 +49,11 @@ impl<R, W> HTP<R, W>
                 ["play", color, pos] => {
                     let color = try!(color.parse().map_err(|_| "invalid color"));
                     let pos = try!(pos.parse::<Pos>().map_err(|_| "invalid move"));
-                    player.play_move(Move::new(color, pos));
-                    Ok("".into())
+                    if player.play_move(Move::new(color, pos)) {
+                        Ok("".into())
+                    } else {
+                        Err("invalid move")
+                    }
                 }
                 ["showboard"] => Ok(format!("\n{}", player.board())),
                 ["name"] => Ok(player.name()),

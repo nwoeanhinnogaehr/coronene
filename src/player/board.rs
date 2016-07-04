@@ -159,6 +159,15 @@ impl Board {
         self[pos] == Cell::Empty
     }
 
+    pub fn play(&mut self, m: Move) -> bool {
+        if !self.is_empty(m.pos) {
+            false
+        } else {
+            self[m.pos] = m.color.into();
+            true
+        }
+    }
+
     pub fn empty_cells(&self) -> Vec<Pos> {
         let mut cells = Vec::new();
         for x in 0..self.cols() {
