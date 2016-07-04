@@ -124,6 +124,22 @@ impl Move {
             pos: pos.into(),
         }
     }
+
+    pub fn pos(&self) -> Option<Pos> {
+        if let &Move::Play { color: _, pos } = self {
+            Some(pos)
+        } else {
+            None
+        }
+    }
+
+    pub fn color(&self) -> Option<Color> {
+        if let &Move::Play { color, pos: _ } = self {
+            Some(color)
+        } else {
+            None
+        }
+    }
 }
 
 impl fmt::Display for Move {
@@ -165,6 +181,12 @@ impl Board {
         where P: Into<Pos>
     {
         self[pos] == Cell::Empty
+    }
+
+    pub fn clear_cell<P>(&mut self, pos: P)
+        where P: Into<Pos>
+    {
+        self[pos] = Cell::Empty;
     }
 
     pub fn play(&mut self, m: Move) -> bool {

@@ -4,6 +4,7 @@ use super::Player;
 use std::io;
 use std::fmt::Display;
 
+// like try!, but it sends the error over htp and continues to the next command
 macro_rules! try_htp {
     ($htp:ident, $e:expr) => {
         match $e {
@@ -57,6 +58,10 @@ impl<R, W> HTP<R, W>
                     } else {
                         self.write_err("invalid move")
                     }
+                }
+                ["undo"] => {
+                    player.undo();
+                    self.write_ok("")
                 }
                 ["showboard"] => self.write_ok(format!("\n{}", player.board())),
                 ["name"] => self.write_ok(player.name()),

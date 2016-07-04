@@ -8,6 +8,7 @@ use rand::{self, ThreadRng, Rng};
 pub trait Player {
     fn generate_move(&mut self, color: Color) -> Move;
     fn play_move(&mut self, m: Move) -> bool;
+    fn undo(&mut self);
     fn board(&self) -> &Board;
     fn name(&self) -> String;
     fn version(&self) -> String;
@@ -17,6 +18,7 @@ pub trait Player {
 pub struct RandomPlayer {
     board: Board,
     rng: ThreadRng,
+    moves: Vec<Move>,
 }
 
 impl RandomPlayer {
@@ -24,6 +26,7 @@ impl RandomPlayer {
         RandomPlayer {
             board: Board::new(13, 13),
             rng: rand::thread_rng(),
+            moves: Vec::new(),
         }
     }
 }
@@ -40,7 +43,14 @@ impl Player for RandomPlayer {
     }
 
     fn play_move(&mut self, m: Move) -> bool {
+        self.moves.push(m);
         return self.board.play(m);
+    }
+
+    fn undo(&mut self) {
+        if let Some(m) = self.moves.pop() {
+            m.pos().map(|pos| self.board.clear_cell(pos));
+        }
     }
 
     fn board(&self) -> &Board {
