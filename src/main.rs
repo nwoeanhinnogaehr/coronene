@@ -5,7 +5,7 @@ extern crate rand;
 mod player;
 
 use player::htp::HTP;
-use player::RandomPlayer;
+use player::randomplayer::RandomPlayer;
 use std::io;
 
 fn main() {
