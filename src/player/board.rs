@@ -29,32 +29,6 @@ impl fmt::Display for Color {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum Cell {
-    Empty,
-    Black,
-    White,
-}
-
-impl fmt::Display for Cell {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Cell::Empty => write!(f, "+"),
-            Cell::Black => write!(f, "B"),
-            Cell::White => write!(f, "W"),
-        }
-    }
-}
-
-impl From<Color> for Cell {
-    fn from(c: Color) -> Cell {
-        match c {
-            Color::Black => Cell::Black,
-            Color::White => Cell::White,
-        }
-    }
-}
-
 pub type Coord = u8;
 
 #[derive(Copy, Clone)]
@@ -157,7 +131,7 @@ impl fmt::Display for Move {
 pub struct Board {
     cols: Coord,
     rows: Coord,
-    board: Vec<Cell>,
+    board: Vec<Option<Color>>,
 }
 
 impl Board {
@@ -165,7 +139,7 @@ impl Board {
         Board {
             cols: cols,
             rows: rows,
-            board: vec![Cell::Empty; rows as usize * cols as usize],
+            board: vec![None; rows as usize * cols as usize],
         }
     }
 
@@ -180,13 +154,13 @@ impl Board {
     pub fn is_empty<P>(&self, pos: P) -> bool
         where P: Into<Pos>
     {
-        self[pos] == Cell::Empty
+        self[pos] == None
     }
 
     pub fn clear_cell<P>(&mut self, pos: P)
         where P: Into<Pos>
     {
-        self[pos] = Cell::Empty;
+        self[pos] = None
     }
 
     pub fn play(&mut self, m: Move) -> bool {
@@ -196,7 +170,7 @@ impl Board {
                 if !self.is_empty(pos) {
                     false
                 } else {
-                    self[pos] = color.into();
+                    self[pos] = Some(color);
                     true
                 }
             }
@@ -227,7 +201,7 @@ impl Board {
 impl<T> Index<T> for Board
     where T: Into<Pos>
 {
-    type Output = Cell;
+    type Output = Option<Color>;
 
     fn index(&self, idx: T) -> &Self::Output {
         let idx = idx.into();
@@ -258,10 +232,16 @@ impl fmt::Display for Board {
                 try!(write!(f, " "));
             }
             try!(write!(f, "{:2}\\", y + 1));
-            for x in 0..self.cols - 1 {
-                try!(write!(f, "{} ", self[(x, y)]));
+            for x in 0..self.cols {
+                match self[(x, y)] {
+                    Some(c) => try!(write!(f, "{}", c)),
+                    None => try!(write!(f, "+")),
+                }
+                if x != self.cols - 1 {
+                    try!(write!(f, " "));
+                }
             }
-            try!(write!(f, "{}\\{}", self[(self.cols - 1, y)], y + 1));
+            try!(write!(f, "\\{}", y + 1));
         }
         try!(write!(f, "\n   "));
         for _ in 0..self.rows {
@@ -287,7 +267,7 @@ impl<T> NodeRef<Option<T>>
                 match m {
                     Move::Resign | Move::None => {}
                     Move::Play { color, pos } => {
-                        board[pos] = color.into();
+                        board[pos] = Some(color);
                         node.incoming()[0].fill_board(board);
                     }
                 }
