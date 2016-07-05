@@ -1,7 +1,7 @@
-use std::ops::{Index, IndexMut};
 use super::graph::NodeRef;
 use std::fmt;
 use std::str::FromStr;
+use std::collections::VecDeque;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Color {
@@ -92,12 +92,12 @@ pub enum Move {
 impl Move {
     pub fn new<P>(color: Color, pos: P) -> Move
         where P: Into<Pos>
-    {
-        Move::Play {
-            color: color,
-            pos: pos.into(),
+        {
+            Move::Play {
+                color: color,
+                pos: pos.into(),
+            }
         }
-    }
 
     pub fn pos(&self) -> Option<Pos> {
         if let &Move::Play { color: _, pos } = self {
@@ -153,15 +153,15 @@ impl Board {
 
     pub fn is_empty<P>(&self, pos: P) -> bool
         where P: Into<Pos>
-    {
-        self[pos] == None
-    }
+        {
+            self.get(pos) == None
+        }
 
     pub fn clear_cell<P>(&mut self, pos: P)
         where P: Into<Pos>
-    {
-        self[pos] = None
-    }
+        {
+            self.set(pos, None);
+        }
 
     pub fn play(&mut self, m: Move) -> bool {
         match m {
@@ -170,7 +170,7 @@ impl Board {
                 if !self.is_empty(pos) {
                     false
                 } else {
-                    self[pos] = Some(color);
+                    self.set(pos, Some(color));
                     true
                 }
             }
@@ -189,34 +189,74 @@ impl Board {
         cells
     }
 
-    fn idx_of(&self, pos: Pos) -> Option<usize> {
-        if pos.x >= self.cols || pos.y >= self.rows {
-            None
-        } else {
-            Some(pos.y as usize * self.rows as usize + pos.x as usize)
+    pub fn connected_neighbors<P>(&self, pos: P) -> Vec<Pos> where P: Into<Pos> {
+        let pos: Pos = pos.into();
+        let neighbor_patterns = &[(-1,0), (0,-1), (-1,1), (0,1), (1,0), (1,-1)];
+        let mut n = Vec::new();
+        for pat in neighbor_patterns {
+            let cell = Pos { x: (pos.x as isize + pat.0) as Coord, y: (pos.y as isize + pat.1) as Coord };
+            if self.on_board(cell) && self.get(cell) == self.get(pos) {
+                n.push(cell);
+            }
         }
+        n
     }
-}
 
-impl<T> Index<T> for Board
-    where T: Into<Pos>
-{
-    type Output = Option<Color>;
-
-    fn index(&self, idx: T) -> &Self::Output {
-        let idx = idx.into();
-        let idx = self.idx_of(idx).expect("board index out of bounds");
-        &self.board[idx]
+    pub fn check_win(&self) -> Option<Color> {
+        let check_color = |color| {
+            let mut visited = vec![false; self.board.len()];
+            let mut q: VecDeque<Pos> = VecDeque::new();
+            let (axis1, axis2, mask1, mask2) = match color {
+                Color::Black => (self.cols(), self.rows(), 1, 0),
+                Color::White => (self.rows(), self.cols(), 0, 1)
+            };
+            for x in 0..axis1 {
+                let pos = (x*mask1, x*mask2).into();
+                if self.get(pos) == Some(color) {
+                    q.push_back(pos);
+                }
+            }
+            while let Some(pos) = q.pop_front() {
+                if pos.y*mask1 + pos.x*mask2 == axis2 - 1 {
+                    return Some(color);
+                }
+                if visited[self.idx_of(pos).unwrap()] {
+                    continue
+                }
+                visited[self.idx_of(pos).unwrap()] = true;
+                for cell in self.connected_neighbors(pos) {
+                    q.push_back(cell);
+                }
+            }
+            None
+        };
+        check_color(Color::Black).or_else(|| check_color(Color::White))
     }
-}
 
-impl<T> IndexMut<T> for Board
-    where T: Into<Pos>
-{
-    fn index_mut(&mut self, idx: T) -> &mut Self::Output {
-        let idx = idx.into();
-        let idx = self.idx_of(idx).expect("board index out of bounds");
-        &mut self.board[idx]
+    pub fn on_board<P>(&self, pos: P) -> bool where P: Into<Pos> {
+        let pos = pos.into();
+        pos.x < self.cols && pos.y < self.rows
+    }
+
+    pub fn get<P: Into<Pos>>(&self, pos: P) -> Option<Color> {
+        let pos = pos.into();
+        let idx = self.idx_of(pos).expect("board index out of bounds");
+        self.board[idx]
+    }
+
+    pub fn set<P: Into<Pos>>(&mut self, pos: P, val: Option<Color>) {
+        let pos = pos.into();
+        let idx = self.idx_of(pos).expect("board index out of bounds");
+        self.board[idx] = val
+    }
+
+    fn idx_of<P: Into<Pos>>(&self, pos: P) -> Option<usize> {
+        let pos = pos.into();
+        if self.on_board(pos) {
+            Some(pos.y as usize * self.rows as usize + pos.x as usize)
+        } else {
+            None
+        }
     }
 }
 
@@ -233,7 +273,7 @@ impl fmt::Display for Board {
             }
             try!(write!(f, "{:2}\\", y + 1));
             for x in 0..self.cols {
-                match self[(x, y)] {
+                match self.get((x, y)) {
                     Some(c) => try!(write!(f, "{}", c)),
                     None => try!(write!(f, "+")),
                 }
@@ -255,7 +295,7 @@ impl fmt::Display for Board {
 }
 
 impl<T> NodeRef<Option<T>>
-    where T: Into<Move> + Clone
+where T: Into<Move> + Clone
 {
     /// Given a node and a board, follow the first parent of each node up to the root, filling in
     /// the move for each node on the board.
@@ -267,7 +307,7 @@ impl<T> NodeRef<Option<T>>
                 match m {
                     Move::Resign | Move::None => {}
                     Move::Play { color, pos } => {
-                        board[pos] = Some(color);
+                        board.set(pos, Some(color));
                         node.incoming()[0].fill_board(board);
                     }
                 }

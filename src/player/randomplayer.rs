@@ -20,6 +20,9 @@ impl RandomPlayer {
 
 impl Player for RandomPlayer {
     fn generate_move(&mut self, color: Color) -> Move {
+        if self.board.check_win().is_some() {
+            return Move::Resign;
+        }
         let pos = self.rng.choose(&self.board.empty_cells()).cloned();
         let m = match pos {
             Some(pos) => Move::new(color, pos),
