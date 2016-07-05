@@ -1,7 +1,6 @@
 use std::io::{BufRead, Write};
 use super::board::{Move, Pos, Coord};
 use super::Player;
-use std::io;
 use std::fmt::Display;
 
 // like try!, but it sends the error over htp and continues to the next command
@@ -10,7 +9,7 @@ macro_rules! try_htp {
         match $e {
             Ok(v) => v,
             Err(e) => {
-                $htp.write_err(e).unwrap();
+                $htp.write_err(e);
                 continue;
             }
         }
@@ -74,12 +73,11 @@ impl<R, W> HTP<R, W>
                     self.write_ok("")
                 }
                 ["quit"] => {
-                    self.write_ok("").unwrap();
+                    self.write_ok("");
                     break;
                 }
                 _ => self.write_err("syntax error"),
             }
-            .unwrap();
         }
     }
 
@@ -92,23 +90,14 @@ impl<R, W> HTP<R, W>
         }
     }
 
-    fn write<T, U>(&mut self, msg: Result<T, U>) -> io::Result<()>
-        where T: Display,
-              U: Display
-    {
-        match msg {
-            Ok(s) => write!(self.output, "= {}\n\n", s),
-            Err(s) => write!(self.output, "? {}\n\n", s),
-        }
-    }
-    fn write_ok<T>(&mut self, msg: T) -> io::Result<()>
+    fn write_ok<T>(&mut self, msg: T)
         where T: Display
     {
-        write!(self.output, "= {}\n\n", msg)
+        write!(self.output, "= {}\n\n", msg).unwrap()
     }
-    fn write_err<T>(&mut self, msg: T) -> io::Result<()>
+    fn write_err<T>(&mut self, msg: T)
         where T: Display
     {
-        write!(self.output, "? {}\n\n", msg)
+        write!(self.output, "? {}\n\n", msg).unwrap()
     }
 }
