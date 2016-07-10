@@ -7,13 +7,6 @@ use rand::{self, thread_rng, ThreadRng, Rng};
 use std::io::Write;
 use std::thread;
 
-macro_rules! eprintln(
-    ($($arg:tt)*) => { {
-        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
-        r.expect("failed printing to stderr");
-    } }
-);
-
 const EXPLORATION: f32 = f32::consts::SQRT_2;
 const SEARCH_TIME: f32 = 10.0;
 const NUM_THREADS: usize = 1;

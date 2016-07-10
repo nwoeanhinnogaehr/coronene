@@ -1,3 +1,10 @@
+macro_rules! eprintln(
+    ($($arg:tt)*) => {
+        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
+        r.expect("failed printing to stderr");
+    }
+);
+
 pub mod graph;
 pub mod board;
 pub mod htp;
