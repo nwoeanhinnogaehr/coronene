@@ -3,8 +3,9 @@ use super::board::{Board, Color, Move, Coord, Pos, Dimensions};
 use super::graph::{NodeRef, Node};
 use std::f32;
 use time;
-use rand::{self, ThreadRng, Rng};
+use rand::{self, thread_rng, ThreadRng, Rng};
 use std::io::Write;
+use std::thread;
 
 macro_rules! eprintln(
     ($($arg:tt)*) => { {
@@ -15,6 +16,7 @@ macro_rules! eprintln(
 
 const EXPLORATION: f32 = f32::consts::SQRT_2;
 const SEARCH_TIME: f32 = 10.0;
+const NUM_THREADS: usize = 1;
 
 #[derive(Clone, Debug)]
 struct MCTSNode {
@@ -58,36 +60,18 @@ impl Node<MCTSNode> {
     }
 }
 
-pub struct MCTSPlayer {
+struct SearchThread {
     board: Board,
     tree: NodeRef<MCTSNode>,
-    moves: Vec<Move>,
-    rng: ThreadRng,
 }
 
-impl MCTSPlayer {
-    pub fn new() -> MCTSPlayer {
-        MCTSPlayer {
-            board: Board::new(Dimensions::new(13, 13)),
-            tree: NodeRef::new(MCTSNode::new(Move::None)),
-            moves: Vec::new(),
-            rng: rand::thread_rng(),
+impl SearchThread {
+    fn new(board: Board, tree: NodeRef<MCTSNode>) -> SearchThread {
+        SearchThread {
+            board: board,
+            tree: tree,
         }
     }
-
-    /// Return the best move according to the current search tree.
-    fn best_move(&mut self) -> Move {
-        // choose the node with the largest number of visits
-        let node = self.tree.get();
-        let max = node.children().iter().map(|x| x.get().data().n).max().unwrap();
-        let max_nodes = node.children()
-                            .iter()
-                            .filter(|x| x.get().data().n == max);
-        let best_node = rand::sample(&mut self.rng, max_nodes, 1)[0];
-        eprintln!("Win rate {}", best_node.get().data().win_rate());
-        return best_node.get().data().get_move();
-    }
-
     fn search(&mut self, max_time: f32) {
         let start_time = time::precise_time_s();
         let mut num_rollouts = 0;
@@ -95,7 +79,7 @@ impl MCTSPlayer {
             let (node, mut state) = self.select_node();
             let outcome = self.roll_out(&mut state);
             self.back_up(node, outcome);
-            num_rollouts += 1
+            num_rollouts += 1;
         }
         eprintln!("Tree size: {}", self.tree.get().tree_size());
         eprintln!("Num rollouts: {}", num_rollouts);
@@ -123,7 +107,7 @@ impl MCTSPlayer {
             }
         }
         if self.expand(state.to_play(), &node, &mut state) {
-            let new_node = self.rng.choose(node.get().children()).cloned().unwrap();
+            let new_node = thread_rng().choose(node.get().children()).cloned().unwrap();
             node = new_node;
             state.play(node.get().data().get_move());
         }
@@ -133,7 +117,7 @@ impl MCTSPlayer {
     fn roll_out(&mut self, state: &mut Board) -> Color {
         let mut empty_cells: Vec<Pos> = state.empty_cells().collect();
         while state.check_win().is_none() {
-            let pos_idx = self.rng.gen_range(0, empty_cells.len());
+            let pos_idx = thread_rng().gen_range(0, empty_cells.len());
             let pos = empty_cells.remove(pos_idx);
             let m = Move::new(state.to_play(), pos);
             state.play(m);
@@ -172,6 +156,52 @@ impl MCTSPlayer {
             } else {
                 break;
             }
+        }
+    }
+}
+
+pub struct MCTSPlayer {
+    board: Board,
+    tree: NodeRef<MCTSNode>,
+    moves: Vec<Move>,
+    rng: ThreadRng,
+}
+
+impl MCTSPlayer {
+    pub fn new() -> MCTSPlayer {
+        MCTSPlayer {
+            board: Board::new(Dimensions::new(13, 13)),
+            tree: NodeRef::new(MCTSNode::new(Move::None)),
+            moves: Vec::new(),
+            rng: rand::thread_rng(),
+        }
+    }
+
+    /// Return the best move according to the current search tree.
+    fn best_move(&mut self) -> Move {
+        // choose the node with the largest number of visits
+        let node = self.tree.get();
+        let max = node.children().iter().map(|x| x.get().data().n).max().unwrap();
+        let max_nodes = node.children()
+                            .iter()
+                            .filter(|x| x.get().data().n == max);
+        let best_node = rand::sample(&mut self.rng, max_nodes, 1)[0];
+        eprintln!("Win rate {}", best_node.get().data().win_rate());
+        return best_node.get().data().get_move();
+    }
+
+    fn search(&mut self, max_time: f32) {
+        let mut threads = Vec::new();
+        for _ in 0..NUM_THREADS {
+            let board = self.board.clone();
+            let tree = self.tree.clone();
+            threads.push(thread::spawn(move || {
+                let mut st = SearchThread::new(board, tree);
+                st.search(max_time);
+            }));
+        }
+        for t in threads {
+            t.join().unwrap();
         }
     }
 
