@@ -62,7 +62,7 @@ impl<R, W> HTP<R, W>
                     player.undo();
                     self.write_ok("")
                 }
-                ["showboard"] => self.write_ok(format!("\n{}", player.board())),
+                ["showboard"] => self.write_ok(player.board()),
                 ["name"] => self.write_ok(player.name()),
                 ["version"] => self.write_ok(player.version()),
                 ["hexgui-analyze_commands"] => self.write_ok(""),
