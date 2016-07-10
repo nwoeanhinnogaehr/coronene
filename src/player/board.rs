@@ -66,6 +66,10 @@ impl Pos {
     pub fn new(x: Coord, y: Coord) -> Pos {
         Pos { x: x, y: y }
     }
+
+    pub fn area(&self) -> usize {
+        self.x as usize * self.y as usize
+    }
 }
 
 impl FromStr for Pos {
@@ -151,33 +155,9 @@ impl fmt::Display for Move {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct Dimensions {
-    pub cols: Coord,
-    pub rows: Coord,
-}
-
-impl Dimensions {
-    pub fn new(cols: Coord, rows: Coord) -> Dimensions {
-        Dimensions {
-            cols: cols,
-            rows: rows,
-        }
-    }
-    pub fn size(&self) -> usize {
-        self.rows() * self.cols()
-    }
-    pub fn cols(&self) -> usize {
-        self.cols as usize
-    }
-    pub fn rows(&self) -> usize {
-        self.rows as usize
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct Board {
-    dims: Dimensions,
+    dims: Pos,
     colors: BitVec,
     empty_cells: BitVec,
     to_play: Color,
@@ -185,17 +165,18 @@ pub struct Board {
 }
 
 impl Board {
-    pub fn new(dims: Dimensions) -> Board {
+    pub fn new<P: Into<Pos>>(dims: P) -> Board {
+        let dims = dims.into();
         Board {
             dims: dims,
-            colors: BitVec::from_elem(dims.size(), false),
-            empty_cells: BitVec::from_elem(dims.size(), true),
+            colors: BitVec::from_elem(dims.area(), false),
+            empty_cells: BitVec::from_elem(dims.area(), true),
             to_play: Color::Black,
-            groups: vec![QuickUnionUf::new(dims.size() + 2); 2],
+            groups: vec![QuickUnionUf::new(dims.area() + 2); 2],
         }
     }
 
-    pub fn dimensions(&self) -> Dimensions {
+    pub fn dimensions(&self) -> Pos {
         self.dims
     }
 
@@ -249,7 +230,7 @@ impl Board {
         where P: Into<Pos>
     {
         let pos = pos.into();
-        pos.x < self.dims.cols && pos.y < self.dims.rows
+        pos.x < self.dims.x && pos.y < self.dims.y
     }
 
     pub fn get<P: Into<Pos>>(&self, pos: P) -> Option<Color> {
@@ -272,8 +253,8 @@ impl Board {
         let i = val as usize;
         if let Some(edge_idx) = match (pos.x, pos.y, val) {
             (_, 0, Color::Black) | (0, _, Color::White) => Some(self.edge_idx(0)),
-            (_, y, Color::Black) if y == self.dims.rows - 1 => Some(self.edge_idx(1)),
-            (x, _, Color::White) if x == self.dims.cols - 1 => Some(self.edge_idx(1)),
+            (_, y, Color::Black) if y == self.dims.y - 1 => Some(self.edge_idx(1)),
+            (x, _, Color::White) if x == self.dims.x - 1 => Some(self.edge_idx(1)),
             _ => None,
         } {
             self.groups[i].union(idx, edge_idx);
@@ -292,9 +273,9 @@ impl Board {
     }
 
     fn rebuild_groups(&mut self) {
-        self.groups = vec![QuickUnionUf::new(self.dims.size() + 2); 2];
-        for x in 0..self.dims.cols {
-            for y in 0..self.dims.rows {
+        self.groups = vec![QuickUnionUf::new(self.dims.area() + 2); 2];
+        for x in 0..self.dims.x {
+            for y in 0..self.dims.y {
                 self.update_groups((x, y));
             }
         }
@@ -323,45 +304,45 @@ impl Board {
     fn idx_of<P: Into<Pos>>(&self, pos: P) -> Option<usize> {
         let pos = pos.into();
         if self.on_board(pos) {
-            Some(pos.y as usize * self.dims.rows() + pos.x as usize)
+            Some(pos.y as usize * self.dims.y as usize + pos.x as usize)
         } else {
             None
         }
     }
 
     fn edge_idx(&self, edge: usize) -> usize {
-        self.dims.size() + edge
+        self.dims.area() + edge
     }
 }
 
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(write!(f, "  "));
-        for x in 0..self.dims.cols {
+        for x in 0..self.dims.x {
             try!(write!(f, "{} ", (x + 'a' as Coord) as char));
         }
-        for y in 0..self.dims.rows {
+        for y in 0..self.dims.y {
             try!(write!(f, "\n"));
             for _ in 0..y {
                 try!(write!(f, " "));
             }
             try!(write!(f, "{:2}\\", y + 1));
-            for x in 0..self.dims.cols {
+            for x in 0..self.dims.x {
                 match self.get((x, y)) {
                     Some(c) => try!(write!(f, "{}", c)),
                     None => try!(write!(f, "+")),
                 }
-                if x != self.dims.cols - 1 {
+                if x != self.dims.x - 1 {
                     try!(write!(f, " "));
                 }
             }
             try!(write!(f, "\\{}", y + 1));
         }
         try!(write!(f, "\n   "));
-        for _ in 0..self.dims.rows {
+        for _ in 0..self.dims.y {
             try!(write!(f, " "));
         }
-        for x in 0..self.dims.cols {
+        for x in 0..self.dims.x {
             try!(write!(f, "{} ", (x + 'a' as Coord) as char));
         }
         Ok(())
@@ -371,7 +352,7 @@ impl fmt::Display for Board {
 pub struct Iter<'a> {
     iter: bit_vec::Iter<'a>,
     idx: usize,
-    dims: Dimensions,
+    dims: Pos,
 }
 
 impl<'a> Iterator for Iter<'a> {
@@ -380,8 +361,8 @@ impl<'a> Iterator for Iter<'a> {
     fn next(&mut self) -> Option<Pos> {
         while let Some(val) = self.iter.next() {
             if val {
-                let res = Some(((self.idx % self.dims.cols()) as Coord,
-                                (self.idx / self.dims.rows()) as Coord)
+                let res = Some(((self.idx % self.dims.x as usize) as Coord,
+                                (self.idx / self.dims.y as usize) as Coord)
                                    .into());
                 self.idx += 1;
                 return res;

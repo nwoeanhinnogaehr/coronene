@@ -1,5 +1,5 @@
 use super::Player;
-use super::board::{Board, Color, Move, Coord, Pos, Dimensions};
+use super::board::{Board, Color, Move, Coord, Pos};
 use super::graph::{NodeRef, Node};
 use std::f32;
 use time;
@@ -170,7 +170,7 @@ pub struct MCTSPlayer {
 impl MCTSPlayer {
     pub fn new() -> MCTSPlayer {
         MCTSPlayer {
-            board: Board::new(Dimensions::new(13, 13)),
+            board: Board::new((13, 13)),
             tree: NodeRef::new(MCTSNode::new(Move::None)),
             moves: Vec::new(),
             rng: rand::thread_rng(),
@@ -266,6 +266,6 @@ impl Player for MCTSPlayer {
     }
 
     fn set_board_size(&mut self, cols: Coord, rows: Coord) {
-        self.board = Board::new(Dimensions::new(cols, rows));
+        self.board = Board::new((cols, rows));
     }
 }
