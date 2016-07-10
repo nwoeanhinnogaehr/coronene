@@ -5,3 +5,6 @@ authors = ["Noah Weninger <nweninge@ualberta.ca>"]
 
 [dependencies]
 rand = "*"
+time = "*"
+bit-vec = "*"
+union-find = "*"

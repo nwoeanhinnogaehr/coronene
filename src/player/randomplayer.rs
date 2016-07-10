@@ -1,5 +1,5 @@
 use super::Player;
-use super::board::{Board, Move, Color, Coord};
+use super::board::{Board, Move, Color, Coord, Pos, Dimensions};
 use rand::{self, ThreadRng, Rng};
 
 pub struct RandomPlayer {
@@ -11,7 +11,7 @@ pub struct RandomPlayer {
 impl RandomPlayer {
     pub fn new() -> RandomPlayer {
         RandomPlayer {
-            board: Board::new(13, 13),
+            board: Board::new(Dimensions::new(13, 13)),
             rng: rand::thread_rng(),
             moves: Vec::new(),
         }
@@ -23,9 +23,10 @@ impl Player for RandomPlayer {
         if self.board.check_win().is_some() {
             return Move::Resign;
         }
-        let pos = self.rng.choose(&self.board.empty_cells()).cloned();
+        let empty_cells: Vec<Pos> = self.board.empty_cells().collect();
+        let pos = self.rng.choose(&empty_cells);
         let m = match pos {
-            Some(pos) => Move::new(color, pos),
+            Some(pos) => Move::new(color, *pos),
             None => Move::Resign,
         };
         self.play_move(m);
@@ -55,6 +56,6 @@ impl Player for RandomPlayer {
     }
 
     fn set_board_size(&mut self, cols: Coord, rows: Coord) {
-        self.board = Board::new(cols, rows);
+        self.board = Board::new(Dimensions::new(cols, rows));
     }
 }

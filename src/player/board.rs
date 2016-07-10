@@ -1,7 +1,7 @@
-use super::graph::NodeRef;
 use std::fmt;
 use std::str::FromStr;
-use std::collections::VecDeque;
+use bit_vec::{self, BitVec};
+use union_find::{UnionFind, UnionBySize, QuickUnionUf};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Color {
@@ -29,9 +29,34 @@ impl fmt::Display for Color {
     }
 }
 
+impl Color {
+    pub fn invert(&self) -> Color {
+        match self {
+            &Color::Black => Color::White,
+            &Color::White => Color::Black,
+        }
+    }
+}
+
+impl From<bool> for Color {
+    fn from(v: bool) -> Color {
+        if v {
+            Color::White
+        } else {
+            Color::Black
+        }
+    }
+}
+
+impl From<Color> for bool {
+    fn from(v: Color) -> bool {
+        v == Color::White
+    }
+}
+
 pub type Coord = u8;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Pos {
     x: Coord,
     y: Coord,
@@ -79,7 +104,7 @@ impl fmt::Display for Pos {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Move {
     Resign,
     None,
@@ -92,12 +117,12 @@ pub enum Move {
 impl Move {
     pub fn new<P>(color: Color, pos: P) -> Move
         where P: Into<Pos>
-        {
-            Move::Play {
-                color: color,
-                pos: pos.into(),
-            }
+    {
+        Move::Play {
+            color: color,
+            pos: pos.into(),
         }
+    }
 
     pub fn pos(&self) -> Option<Pos> {
         if let &Move::Play { color: _, pos } = self {
@@ -126,42 +151,65 @@ impl fmt::Display for Move {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct Dimensions {
+    pub cols: Coord,
+    pub rows: Coord,
+}
 
-#[derive(Clone)]
+impl Dimensions {
+    pub fn new(cols: Coord, rows: Coord) -> Dimensions {
+        Dimensions {
+            cols: cols,
+            rows: rows,
+        }
+    }
+    pub fn size(&self) -> usize {
+        self.rows() * self.cols()
+    }
+    pub fn cols(&self) -> usize {
+        self.cols as usize
+    }
+    pub fn rows(&self) -> usize {
+        self.rows as usize
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Board {
-    cols: Coord,
-    rows: Coord,
-    board: Vec<Option<Color>>,
+    dims: Dimensions,
+    colors: BitVec,
+    empty_cells: BitVec,
+    to_play: Color,
+    groups: Vec<QuickUnionUf<UnionBySize>>,
 }
 
 impl Board {
-    pub fn new(cols: Coord, rows: Coord) -> Board {
+    pub fn new(dims: Dimensions) -> Board {
         Board {
-            cols: cols,
-            rows: rows,
-            board: vec![None; rows as usize * cols as usize],
+            dims: dims,
+            colors: BitVec::from_elem(dims.size(), false),
+            empty_cells: BitVec::from_elem(dims.size(), true),
+            to_play: Color::Black,
+            groups: vec![QuickUnionUf::new(dims.size() + 2); 2],
         }
     }
 
-    pub fn cols(&self) -> Coord {
-        self.cols
-    }
-
-    pub fn rows(&self) -> Coord {
-        self.rows
+    pub fn dimensions(&self) -> Dimensions {
+        self.dims
     }
 
     pub fn is_empty<P>(&self, pos: P) -> bool
         where P: Into<Pos>
-        {
-            self.get(pos) == None
-        }
+    {
+        self.get(pos) == None
+    }
 
     pub fn clear_cell<P>(&mut self, pos: P)
         where P: Into<Pos>
-        {
-            self.set(pos, None);
-        }
+    {
+        self.set(pos, None);
+    }
 
     pub fn play(&mut self, m: Move) -> bool {
         match m {
@@ -171,148 +219,175 @@ impl Board {
                     false
                 } else {
                     self.set(pos, Some(color));
+                    self.to_play = color.invert();
                     true
                 }
             }
         }
     }
 
-    pub fn empty_cells(&self) -> Vec<Pos> {
-        let mut cells = Vec::new();
-        for x in 0..self.cols() {
-            for y in 0..self.rows() {
-                if self.is_empty((x, y)) {
-                    cells.push((x, y).into());
-                }
+    pub fn empty_cells<'a>(&'a self) -> Iter<'a> {
+        Iter {
+            iter: self.empty_cells.iter(),
+            idx: 0,
+            dims: self.dims,
+        }
+    }
+
+    pub fn check_win(&mut self) -> Option<Color> {
+        let edge0 = self.edge_idx(0);
+        let edge1 = self.edge_idx(1);
+        for i in 0..2 {
+            if self.groups[i].find(edge0) == self.groups[i].find(edge1) {
+                return Some((i > 0).into());
             }
         }
-        cells
+        None
     }
 
-    pub fn connected_neighbors<P>(&self, pos: P) -> Vec<Pos> where P: Into<Pos> {
-        let pos: Pos = pos.into();
-        let neighbor_patterns = &[(-1,0), (0,-1), (-1,1), (0,1), (1,0), (1,-1)];
-        let mut n = Vec::new();
-        for pat in neighbor_patterns {
-            let cell = Pos { x: (pos.x as isize + pat.0) as Coord, y: (pos.y as isize + pat.1) as Coord };
-            if self.on_board(cell) && self.get(cell) == self.get(pos) {
-                n.push(cell);
-            }
-        }
-        n
-    }
-
-    pub fn check_win(&self) -> Option<Color> {
-        let check_color = |color| {
-            let mut visited = vec![false; self.board.len()];
-            let mut q: VecDeque<Pos> = VecDeque::new();
-            let (axis1, axis2, mask1, mask2) = match color {
-                Color::Black => (self.cols(), self.rows(), 1, 0),
-                Color::White => (self.rows(), self.cols(), 0, 1)
-            };
-            for x in 0..axis1 {
-                let pos = (x*mask1, x*mask2).into();
-                if self.get(pos) == Some(color) {
-                    q.push_back(pos);
-                }
-            }
-            while let Some(pos) = q.pop_front() {
-                if pos.y*mask1 + pos.x*mask2 == axis2 - 1 {
-                    return Some(color);
-                }
-                if visited[self.idx_of(pos).unwrap()] {
-                    continue
-                }
-                visited[self.idx_of(pos).unwrap()] = true;
-                for cell in self.connected_neighbors(pos) {
-                    q.push_back(cell);
-                }
-            }
-            None
-        };
-        check_color(Color::Black).or_else(|| check_color(Color::White))
-    }
-
-    pub fn on_board<P>(&self, pos: P) -> bool where P: Into<Pos> {
+    pub fn on_board<P>(&self, pos: P) -> bool
+        where P: Into<Pos>
+    {
         let pos = pos.into();
-        pos.x < self.cols && pos.y < self.rows
+        pos.x < self.dims.cols && pos.y < self.dims.rows
     }
 
     pub fn get<P: Into<Pos>>(&self, pos: P) -> Option<Color> {
         let pos = pos.into();
         let idx = self.idx_of(pos).expect("board index out of bounds");
-        self.board[idx]
+        if self.empty_cells[idx] {
+            None
+        } else {
+            Some(self.colors[idx].into())
+        }
+    }
+
+    fn update_groups<P: Into<Pos>>(&mut self, pos: P) {
+        let pos = pos.into();
+        let val = match self.get(pos) {
+            Some(val) => val,
+            None => return,
+        };
+        let idx = self.idx_of(pos).unwrap();
+        let i = val as usize;
+        if let Some(edge_idx) = match (pos.x, pos.y, val) {
+            (_, 0, Color::Black) | (0, _, Color::White) => Some(self.edge_idx(0)),
+            (_, y, Color::Black) if y == self.dims.rows - 1 => Some(self.edge_idx(1)),
+            (x, _, Color::White) if x == self.dims.cols - 1 => Some(self.edge_idx(1)),
+            _ => None,
+        } {
+            self.groups[i].union(idx, edge_idx);
+        }
+        let neighbor_patterns = &[(-1, 0), (0, -1), (-1, 1), (0, 1), (1, 0), (1, -1)];
+        for pat in neighbor_patterns {
+            let cell = Pos {
+                x: (pos.x as isize + pat.0) as Coord,
+                y: (pos.y as isize + pat.1) as Coord,
+            };
+            if self.on_board(cell) && self.get(cell) == Some(val) {
+                let connection_idx = self.idx_of(cell).unwrap();
+                self.groups[i].union(idx, connection_idx);
+            }
+        }
+    }
+
+    fn rebuild_groups(&mut self) {
+        self.groups = vec![QuickUnionUf::new(self.dims.size() + 2); 2];
+        for x in 0..self.dims.cols {
+            for y in 0..self.dims.rows {
+                self.update_groups((x, y));
+            }
+        }
     }
 
     pub fn set<P: Into<Pos>>(&mut self, pos: P, val: Option<Color>) {
         let pos = pos.into();
         let idx = self.idx_of(pos).expect("board index out of bounds");
-        self.board[idx] = val
+        self.empty_cells.set(idx, val.is_none());
+        if let Some(color) = val {
+            self.colors.set(idx, color.into());
+            self.update_groups(pos);
+        } else {
+            self.rebuild_groups();
+        }
+    }
+
+    pub fn to_play(&self) -> Color {
+        self.to_play
+    }
+
+    pub fn set_to_play(&mut self, color: Color) {
+        self.to_play = color;
     }
 
     fn idx_of<P: Into<Pos>>(&self, pos: P) -> Option<usize> {
         let pos = pos.into();
         if self.on_board(pos) {
-            Some(pos.y as usize * self.rows as usize + pos.x as usize)
+            Some(pos.y as usize * self.dims.rows() + pos.x as usize)
         } else {
             None
         }
+    }
+
+    fn edge_idx(&self, edge: usize) -> usize {
+        self.dims.size() + edge
     }
 }
 
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(write!(f, "  "));
-        for x in 0..self.cols {
+        for x in 0..self.dims.cols {
             try!(write!(f, "{} ", (x + 'a' as Coord) as char));
         }
-        for y in 0..self.rows {
+        for y in 0..self.dims.rows {
             try!(write!(f, "\n"));
             for _ in 0..y {
                 try!(write!(f, " "));
             }
             try!(write!(f, "{:2}\\", y + 1));
-            for x in 0..self.cols {
+            for x in 0..self.dims.cols {
                 match self.get((x, y)) {
                     Some(c) => try!(write!(f, "{}", c)),
                     None => try!(write!(f, "+")),
                 }
-                if x != self.cols - 1 {
+                if x != self.dims.cols - 1 {
                     try!(write!(f, " "));
                 }
             }
             try!(write!(f, "\\{}", y + 1));
         }
         try!(write!(f, "\n   "));
-        for _ in 0..self.rows {
+        for _ in 0..self.dims.rows {
             try!(write!(f, " "));
         }
-        for x in 0..self.cols {
+        for x in 0..self.dims.cols {
             try!(write!(f, "{} ", (x + 'a' as Coord) as char));
         }
         Ok(())
     }
 }
 
-impl<T> NodeRef<Option<T>>
-where T: Into<Move> + Clone
-{
-    /// Given a node and a board, follow the first parent of each node up to the root, filling in
-    /// the move for each node on the board.
-    pub fn fill_board(&self, board: &mut Board) {
-        let node = self.node();
-        match node.data() {
-            &Some(ref data) => {
-                let m = data.clone().into();
-                match m {
-                    Move::Resign | Move::None => {}
-                    Move::Play { color, pos } => {
-                        board.set(pos, Some(color));
-                        node.incoming()[0].fill_board(board);
-                    }
-                }
+pub struct Iter<'a> {
+    iter: bit_vec::Iter<'a>,
+    idx: usize,
+    dims: Dimensions,
+}
+
+impl<'a> Iterator for Iter<'a> {
+    type Item = Pos;
+
+    fn next(&mut self) -> Option<Pos> {
+        while let Some(val) = self.iter.next() {
+            if val {
+                let res = Some(((self.idx % self.dims.cols()) as Coord,
+                                (self.idx / self.dims.rows()) as Coord)
+                                   .into());
+                self.idx += 1;
+                return res;
             }
-            &None => {}
+            self.idx += 1;
         }
+        None
     }
 }
