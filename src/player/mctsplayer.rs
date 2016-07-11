@@ -124,6 +124,7 @@ impl SearchThread {
             node.add_child(NodeRef::new(MCTSNode::new(Move::new(color, pos))));
         }
     }
+
     fn back_up(&mut self, mut node: NodeRef<MCTSNode>, outcome: Color) {
         let mut reward = if outcome == node.get().data().get_move().color().unwrap() {
             1
@@ -256,5 +257,7 @@ impl Player for MCTSPlayer {
 
     fn set_board_size(&mut self, cols: Coord, rows: Coord) {
         self.board = Board::new((cols, rows));
+        self.clear_tree();
+        self.moves.clear();
     }
 }
