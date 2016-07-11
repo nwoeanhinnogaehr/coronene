@@ -99,7 +99,8 @@ impl SearchThread {
                 return (node, state);
             }
         }
-        if self.expand(state.to_play(), &node, &mut state) {
+        if state.check_win().is_none() {
+            self.expand(state.to_play(), &node, &mut state);
             let new_node = thread_rng().choose(node.get().children()).cloned().unwrap();
             node = new_node;
             state.play(node.get().data().get_move());
@@ -118,14 +119,9 @@ impl SearchThread {
         state.check_win().unwrap()
     }
 
-    fn expand(&mut self, color: Color, node: &NodeRef<MCTSNode>, state: &mut Board) -> bool {
-        if state.check_win().is_some() {
-            false
-        } else {
-            for pos in state.empty_cells() {
-                node.add_child(NodeRef::new(MCTSNode::new(Move::new(color, pos))));
-            }
-            true
+    fn expand(&mut self, color: Color, node: &NodeRef<MCTSNode>, state: &mut Board) {
+        for pos in state.empty_cells() {
+            node.add_child(NodeRef::new(MCTSNode::new(Move::new(color, pos))));
         }
     }
     fn back_up(&mut self, mut node: NodeRef<MCTSNode>, outcome: Color) {
@@ -176,8 +172,8 @@ impl MCTSPlayer {
         let node = self.tree.get();
         let max = node.children().iter().map(|x| x.get().data().n).max().unwrap();
         let max_nodes = node.children()
-                            .iter()
-                            .filter(|x| x.get().data().n == max);
+            .iter()
+            .filter(|x| x.get().data().n == max);
         let best_node = rand::sample(&mut self.rng, max_nodes, 1)[0];
         eprintln!("Win rate {}", best_node.get().data().win_rate());
         return best_node.get().data().get_move();
@@ -222,11 +218,11 @@ impl Player for MCTSPlayer {
     /// Force a move.
     fn play_move(&mut self, m: Move) -> bool {
         let node = self.tree
-                       .get()
-                       .children()
-                       .iter()
-                       .find(|x| x.get().data().get_move() == m)
-                       .cloned();
+            .get()
+            .children()
+            .iter()
+            .find(|x| x.get().data().get_move() == m)
+            .cloned();
         if let Some(new_root) = node {
             // if the move is in the tree, make it the new root
             new_root.get_mut().orphan();
