@@ -56,8 +56,8 @@ impl<T> NodeRef<T> {
     }
 
     pub fn add_child(&self, child: NodeRef<T>) -> NodeRef<T> {
-        self.0.write().unwrap().children.push(NodeRef(child.0.clone()));
-        child.0.write().unwrap().parent = Some(WeakNodeRef(Arc::downgrade(&self.0.clone())));
+        self.get_mut().children.push(NodeRef(child.0.clone()));
+        child.get_mut().parent = Some(WeakNodeRef(Arc::downgrade(&self.0.clone())));
         child
     }
 
