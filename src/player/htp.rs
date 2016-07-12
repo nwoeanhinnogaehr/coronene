@@ -50,9 +50,14 @@ impl<R, W> HTP<R, W>
                     self.write_ok(format!("{}", player.generate_move(color)))
                 }
                 ["play", color, pos] => {
-                    let color = try_htp!(self, color.parse().map_err(|_| "invalid color"));
-                    let pos = try_htp!(self, pos.parse::<Pos>().map_err(|_| "invalid move"));
-                    if player.play_move(Move::new(color, pos)) {
+                    let m = if pos == "resign" {
+                        Move::Resign
+                    } else {
+                        let color = try_htp!(self, color.parse().map_err(|_| "invalid color"));
+                        let pos = try_htp!(self, pos.parse::<Pos>().map_err(|_| "invalid move"));
+                        Move::new(color, pos)
+                    };
+                    if player.play_move(m) {
                         self.write_ok("")
                     } else {
                         self.write_err("invalid move")
@@ -75,6 +80,13 @@ impl<R, W> HTP<R, W>
                 ["quit"] => {
                     self.write_ok("");
                     break;
+                }
+                ["final_score"] => {
+                    if let Some(color) = player.board().winner() {
+                        self.write_ok(color);
+                    } else {
+                        self.write_err("game is not finished!");
+                    }
                 }
                 _ => self.write_err("syntax error"),
             }

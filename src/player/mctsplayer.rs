@@ -8,7 +8,7 @@ use std::io::Write;
 use std::thread;
 
 const EXPLORATION: f32 = f32::consts::SQRT_2;
-const SEARCH_TIME: f32 = 10.0;
+const SEARCH_TIME: f32 = 1.0;
 const NUM_THREADS: usize = 1;
 
 #[derive(Clone, Debug)]
@@ -20,11 +20,7 @@ struct MCTSNode {
 
 impl MCTSNode {
     pub fn new(m: Move) -> MCTSNode {
-        MCTSNode {
-            m: m,
-            n: 0,
-            q: 0,
-        }
+        MCTSNode { m: m, n: 0, q: 0 }
     }
     pub fn get_move(&self) -> Move {
         self.m
@@ -99,7 +95,7 @@ impl SearchThread {
                 return (node, state);
             }
         }
-        if state.check_win().is_none() {
+        if state.winner().is_none() {
             self.expand(state.to_play(), &node, &mut state);
             let new_node = thread_rng().choose(node.get().children()).cloned().unwrap();
             node = new_node;
@@ -110,13 +106,54 @@ impl SearchThread {
 
     fn roll_out(&mut self, state: &mut Board) -> Color {
         let mut empty_cells: Vec<Pos> = state.empty_cells().collect();
-        while state.check_win().is_none() {
-            let pos_idx = thread_rng().gen_range(0, empty_cells.len());
-            let pos = empty_cells.remove(pos_idx);
-            let m = Move::new(state.to_play(), pos);
-            state.play(m);
+        loop {
+            let must_play = self.must_play(state);
+            let m = match must_play {
+                Move::Resign => break,
+                Move::None => {
+                    let pos_idx = thread_rng().gen_range(0, empty_cells.len());
+                    let pos = empty_cells.remove(pos_idx);
+                    Move::new(state.to_play(), pos)
+                }
+                Move::Play { pos, color: _ } => {
+                    let idx = empty_cells.iter().position(|&x| x == pos).unwrap();
+                    empty_cells.remove(idx);
+                    must_play
+                }
+            };
+            if !state.play(m) {
+                panic!("roll out chose filled cell!");
+            }
         }
-        state.check_win().unwrap()
+        state.winner().unwrap()
+    }
+
+    fn must_play(&mut self, state: &Board) -> Move {
+        // game over, must play resign
+        if state.winner().is_some() {
+            return Move::Resign;
+        }
+
+        // save bridge
+        let last_move = state.last_move();
+        if let Move::Play { pos, color } = last_move {
+            let neighbor_patterns = &[(-1, 0), (0, -1), (1, -1), (1, 0), (0, 1), (-1, 1)];
+            let bridge_end_patterns = &[(-1, -1), (1, -2), (2, -1), (1, 1), (-1, 2), (-2, 1)];
+            let num_pat = neighbor_patterns.len();
+            for i in 0..num_pat {
+                let (end_a, end_b) = (pos + neighbor_patterns[i].into(),
+                                      pos + neighbor_patterns[(i + 2) % num_pat].into());
+                let resp = pos + neighbor_patterns[(i + 1) % num_pat].into();
+                if state.get(end_a) == Some(color.invert()) &&
+                   state.get(end_a) == state.get(end_b) &&
+                   state.get(resp).is_none() {
+                    return Move::new(color, resp);
+                }
+            }
+        }
+
+        // no mustplay
+        Move::None
     }
 
     fn expand(&mut self, color: Color, node: &NodeRef<MCTSNode>, state: &mut Board) {
@@ -173,8 +210,8 @@ impl MCTSPlayer {
         let node = self.tree.get();
         let max = node.children().iter().map(|x| x.get().data().n).max().unwrap();
         let max_nodes = node.children()
-            .iter()
-            .filter(|x| x.get().data().n == max);
+                            .iter()
+                            .filter(|x| x.get().data().n == max);
         let best_node = rand::sample(&mut self.rng, max_nodes, 1)[0];
         eprintln!("Win rate {}", best_node.get().data().win_rate());
         return best_node.get().data().get_move();
@@ -202,7 +239,7 @@ impl MCTSPlayer {
 
 impl Player for MCTSPlayer {
     fn generate_move(&mut self, color: Color) -> Move {
-        if self.board.check_win().is_some() {
+        if self.board.winner().is_some() {
             return Move::Resign;
         }
 
@@ -219,11 +256,11 @@ impl Player for MCTSPlayer {
     /// Force a move.
     fn play_move(&mut self, m: Move) -> bool {
         let node = self.tree
-            .get()
-            .children()
-            .iter()
-            .find(|x| x.get().data().get_move() == m)
-            .cloned();
+                       .get()
+                       .children()
+                       .iter()
+                       .find(|x| x.get().data().get_move() == m)
+                       .cloned();
         if let Some(new_root) = node {
             // if the move is in the tree, make it the new root
             new_root.get_mut().orphan();

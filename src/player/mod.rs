@@ -8,7 +8,7 @@ macro_rules! eprintln(
 pub mod graph;
 pub mod board;
 pub mod htp;
-pub mod randomplayer;
+//pub mod randomplayer;
 pub mod mctsplayer;
 
 use self::board::{Board, Coord, Color, Move};

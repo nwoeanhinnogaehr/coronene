@@ -2,6 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 use bit_vec::{self, BitVec};
 use union_find::{UnionFind, UnionBySize, QuickUnionUf};
+use std::ops::Add;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Color {
@@ -54,7 +55,7 @@ impl From<Color> for bool {
     }
 }
 
-pub type Coord = u8;
+pub type Coord = i8;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Pos {
@@ -86,7 +87,7 @@ impl FromStr for Pos {
             Ok(y) => y - 1,
             Err(_) => return Err(()),
         };
-        Ok(Pos::new(x, y))
+        Ok(Pos::new(x as Coord, y as Coord))
     }
 }
 
@@ -104,7 +105,18 @@ impl<'a> From<&'a str> for Pos {
 
 impl fmt::Display for Pos {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{}", (self.x + 'A' as Coord) as char, self.y + 1)
+        write!(f, "{}{}", (self.x + 'A' as Coord) as u8 as char, self.y + 1)
+    }
+}
+
+impl Add for Pos {
+    type Output = Pos;
+
+    fn add(self, rhs: Pos) -> Pos {
+        Pos {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
     }
 }
 
@@ -162,6 +174,8 @@ pub struct Board {
     empty_cells: BitVec,
     to_play: Color,
     groups: Vec<QuickUnionUf<UnionBySize>>,
+    last_move: Move,
+    winner: Option<Color>,
 }
 
 impl Board {
@@ -173,6 +187,8 @@ impl Board {
             empty_cells: BitVec::from_elem(dims.area(), true),
             to_play: Color::Black,
             groups: vec![QuickUnionUf::new(dims.area() + 2); 2],
+            last_move: Move::None,
+            winner: None,
         }
     }
 
@@ -199,9 +215,9 @@ impl Board {
                 if !self.is_empty(pos) {
                     false
                 } else {
-                    self.set(pos, Some(color));
                     self.to_play = color.invert();
-                    true
+                    self.last_move = m;
+                    self.set(pos, Some(color))
                 }
             }
         }
@@ -215,31 +231,33 @@ impl Board {
         }
     }
 
-    pub fn check_win(&mut self) -> Option<Color> {
-        let edge0 = self.edge_idx(0);
-        let edge1 = self.edge_idx(1);
-        for i in 0..2 {
-            if self.groups[i].find(edge0) == self.groups[i].find(edge1) {
-                return Some((i > 0).into());
-            }
-        }
-        None
+    pub fn winner(&self) -> Option<Color> {
+        self.winner
     }
 
     pub fn on_board<P>(&self, pos: P) -> bool
         where P: Into<Pos>
     {
         let pos = pos.into();
-        pos.x < self.dims.x && pos.y < self.dims.y
+        pos.x >= 0 && pos.y >= 0 && pos.x < self.dims.x && pos.y < self.dims.y
     }
 
     pub fn get<P: Into<Pos>>(&self, pos: P) -> Option<Color> {
         let pos = pos.into();
-        let idx = self.idx_of(pos).expect("board index out of bounds");
-        if self.empty_cells[idx] {
-            None
+        if let Some(idx) = self.idx_of(pos) {
+            if self.empty_cells[idx] {
+                None
+            } else {
+                Some(self.colors[idx].into())
+            }
         } else {
-            Some(self.colors[idx].into())
+            if (pos.x < 0 || pos.x >= self.dims.x) && pos.y >= 0 && pos.y < self.dims.y {
+                Some(Color::White)
+            } else if (pos.y < 0 || pos.y >= self.dims.y) && pos.x >= 0 && pos.x < self.dims.x {
+                Some(Color::Black)
+            } else {
+                None
+            }
         }
     }
 
@@ -251,22 +269,11 @@ impl Board {
         };
         let idx = self.idx_of(pos).unwrap();
         let i = val as usize;
-        if let Some(edge_idx) = match (pos.x, pos.y, val) {
-            (_, 0, Color::Black) | (0, _, Color::White) => Some(self.edge_idx(0)),
-            (_, y, Color::Black) if y == self.dims.y - 1 => Some(self.edge_idx(1)),
-            (x, _, Color::White) if x == self.dims.x - 1 => Some(self.edge_idx(1)),
-            _ => None,
-        } {
-            self.groups[i].union(idx, edge_idx);
-        }
         let neighbor_patterns = &[(-1, 0), (0, -1), (-1, 1), (0, 1), (1, 0), (1, -1)];
-        for pat in neighbor_patterns {
-            let cell = Pos {
-                x: (pos.x as isize + pat.0) as Coord,
-                y: (pos.y as isize + pat.1) as Coord,
-            };
-            if self.on_board(cell) && self.get(cell) == Some(val) {
-                let connection_idx = self.idx_of(cell).unwrap();
+        for &pat in neighbor_patterns {
+            let cell = pos + pat.into();
+            if self.get(cell) == Some(val) {
+                let connection_idx = self.group_idx(cell).unwrap();
                 self.groups[i].union(idx, connection_idx);
             }
         }
@@ -279,18 +286,36 @@ impl Board {
                 self.update_groups((x, y));
             }
         }
+        self.update_winner();
     }
 
-    pub fn set<P: Into<Pos>>(&mut self, pos: P, val: Option<Color>) {
+    fn update_winner(&mut self) {
+        let edge0 = self.edge_idx(0);
+        let edge1 = self.edge_idx(1);
+        self.winner = None;
+        for i in 0..2 {
+            if self.groups[i].find(edge0) == self.groups[i].find(edge1) {
+                self.winner = Some((i > 0).into());
+            }
+        }
+    }
+
+    pub fn set<P: Into<Pos>>(&mut self, pos: P, val: Option<Color>) -> bool {
         let pos = pos.into();
-        let idx = self.idx_of(pos).expect("board index out of bounds");
+        let idx = match self.idx_of(pos) {
+            Some(idx) => idx,
+            None => return false
+        };
+
         self.empty_cells.set(idx, val.is_none());
         if let Some(color) = val {
             self.colors.set(idx, color.into());
             self.update_groups(pos);
+            self.update_winner();
         } else {
             self.rebuild_groups();
         }
+        true
     }
 
     pub fn to_play(&self) -> Color {
@@ -301,12 +326,31 @@ impl Board {
         self.to_play = color;
     }
 
+    pub fn last_move(&self) -> Move {
+        self.last_move
+    }
+
     fn idx_of<P: Into<Pos>>(&self, pos: P) -> Option<usize> {
         let pos = pos.into();
         if self.on_board(pos) {
             Some(pos.y as usize * self.dims.y as usize + pos.x as usize)
         } else {
             None
+        }
+    }
+
+    fn group_idx<P: Into<Pos>>(&self, pos: P) -> Option<usize> {
+        let pos = pos.into();
+        if let Some(idx) = self.idx_of(pos) {
+            Some(idx)
+        } else {
+            if pos.x == -1 || pos.y == -1 {
+                Some(self.edge_idx(0))
+            } else if pos.x == self.dims.x || pos.y == self.dims.y {
+                Some(self.edge_idx(1))
+            } else {
+                None
+            }
         }
     }
 
@@ -319,7 +363,7 @@ impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(write!(f, "  "));
         for x in 0..self.dims.x {
-            try!(write!(f, "{} ", (x + 'a' as Coord) as char));
+            try!(write!(f, "{} ", (x + 'a' as Coord) as u8 as char));
         }
         for y in 0..self.dims.y {
             try!(write!(f, "\n"));
@@ -343,7 +387,7 @@ impl fmt::Display for Board {
             try!(write!(f, " "));
         }
         for x in 0..self.dims.x {
-            try!(write!(f, "{} ", (x + 'a' as Coord) as char));
+            try!(write!(f, "{} ", (x + 'a' as Coord) as u8 as char));
         }
         Ok(())
     }
