@@ -245,12 +245,14 @@ impl Board {
     pub fn get<P: Into<Pos>>(&self, pos: P) -> Option<Color> {
         let pos = pos.into();
         if let Some(idx) = self.idx_of(pos) {
+            // on board, return cell color
             if self.empty_cells[idx] {
                 None
             } else {
                 Some(self.colors[idx].into())
             }
         } else {
+            // off board, return edge color
             if (pos.x < 0 || pos.x >= self.dims.x) && pos.y >= 0 && pos.y < self.dims.y {
                 Some(Color::White)
             } else if (pos.y < 0 || pos.y >= self.dims.y) && pos.x >= 0 && pos.x < self.dims.x {
