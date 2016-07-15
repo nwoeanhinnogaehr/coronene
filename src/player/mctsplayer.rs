@@ -9,7 +9,7 @@ use std::thread;
 
 const EXPLORATION: f32 = f32::consts::SQRT_2;
 const SEARCH_TIME: f32 = 1.0;
-const NUM_THREADS: usize = 1;
+const NUM_THREADS: usize = 2;
 
 #[derive(Clone, Debug)]
 struct MCTSNode {
@@ -138,16 +138,15 @@ impl SearchThread {
         let last_move = state.last_move();
         if let Move::Play { pos, color } = last_move {
             let neighbor_patterns = &[(-1, 0), (0, -1), (1, -1), (1, 0), (0, 1), (-1, 1)];
-            let bridge_end_patterns = &[(-1, -1), (1, -2), (2, -1), (1, 1), (-1, 2), (-2, 1)];
             let num_pat = neighbor_patterns.len();
             for i in 0..num_pat {
                 let (end_a, end_b) = (pos + neighbor_patterns[i].into(),
                                       pos + neighbor_patterns[(i + 2) % num_pat].into());
                 let resp = pos + neighbor_patterns[(i + 1) % num_pat].into();
-                if state.get(end_a) == Some(color.invert()) &&
+                if state.get(end_a) == Some(state.to_play()) &&
                    state.get(end_a) == state.get(end_b) &&
                    state.get(resp).is_none() {
-                    return Move::new(color, resp);
+                    return Move::new(state.to_play(), resp);
                 }
             }
         }
@@ -156,7 +155,7 @@ impl SearchThread {
         Move::None
     }
 
-    fn expand(&mut self, color: Color, node: &NodeRef<MCTSNode>, state: &mut Board) {
+    fn expand(&mut self, color: Color, node: &NodeRef<MCTSNode>, state: &Board) {
         for pos in state.empty_cells() {
             node.add_child(NodeRef::new(MCTSNode::new(Move::new(color, pos))));
         }
