@@ -139,8 +139,9 @@ impl SearchThread {
         if let Move::Play { pos, color } = last_move {
             let neighbor_patterns = &[(-1, 0), (0, -1), (1, -1), (1, 0), (0, 1), (-1, 1)];
             let num_pat = neighbor_patterns.len();
-            for i in 0..num_pat {
-                let (end_a, end_b) = (pos + neighbor_patterns[i].into(),
+            let start = thread_rng().gen_range(0, num_pat);
+            for i in start..(num_pat + start) {
+                let (end_a, end_b) = (pos + neighbor_patterns[i % num_pat].into(),
                                       pos + neighbor_patterns[(i + 2) % num_pat].into());
                 let resp = pos + neighbor_patterns[(i + 1) % num_pat].into();
                 if state.get(end_a) == Some(state.to_play()) &&
