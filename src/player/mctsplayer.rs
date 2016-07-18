@@ -5,34 +5,41 @@ use std::f32;
 use time;
 use rand::{self, thread_rng, ThreadRng, Rng};
 use std::thread;
+use std::sync::atomic::{AtomicIsize, Ordering};
 
 const EXPLORATION: f32 = f32::consts::SQRT_2;
 const SEARCH_TIME: f32 = 1.0;
 const NUM_THREADS: usize = 4;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct MCTSNode {
     m: Move,
-    n: isize,
-    q: isize,
+    n: AtomicIsize,
+    q: AtomicIsize,
 }
 
 impl MCTSNode {
     pub fn new(m: Move) -> MCTSNode {
-        MCTSNode { m: m, n: 0, q: 0 }
+        MCTSNode { m: m, n: AtomicIsize::new(0), q: AtomicIsize::new(0) }
     }
     pub fn get_move(&self) -> Move {
         self.m
     }
     pub fn win_rate(&self) -> f32 {
-        self.q as f32 / self.n as f32
+        self.q() as f32 / self.n() as f32
+    }
+    pub fn n(&self) -> isize {
+        self.n.load(Ordering::Relaxed)
+    }
+    pub fn q(&self) -> isize {
+        self.q.load(Ordering::Relaxed)
     }
 }
 
 impl Node<MCTSNode> {
     pub fn value(&self) -> f32 {
         let data = self.data();
-        if data.n == 0 {
+        if data.n() == 0 {
             if EXPLORATION == 0.0 {
                 0.0
             } else {
@@ -40,9 +47,9 @@ impl Node<MCTSNode> {
             }
         } else {
             let parent = self.parent().unwrap().upgrade();
-            let parent_n = parent.get().data().n as f32;
-            let q = data.q as f32;
-            let n = data.n as f32;
+            let parent_n = parent.get().data().n() as f32;
+            let q = data.q() as f32;
+            let n = data.n() as f32;
             q / n + EXPLORATION * (2.0 * parent_n.ln() / n).sqrt()
         }
     }
@@ -76,7 +83,7 @@ impl SearchThread {
     fn select_node(&mut self) -> (NodeRef<MCTSNode>, Board) {
         let mut node = self.tree.clone();
         let mut state = self.board.clone();
-        node.get_mut().data_mut().n += 1;
+        node.get_mut().data_mut().n.fetch_add(1, Ordering::Relaxed);
         while node.get().children().len() != 0 {
             // find the child with the max value
             let mut max_node = node.get().children()[0].clone();
@@ -90,9 +97,9 @@ impl SearchThread {
             }
             node = max_node;
             state.play(node.get().data().get_move());
-            node.get_mut().data_mut().n += 1;
+            node.get_mut().data_mut().n.fetch_add(1, Ordering::Relaxed);
             // if it hasn't been visited, it's the one
-            if node.get().data().n == 1 {
+            if node.get().data().n() == 1 {
                 return (node, state);
             }
         }
@@ -100,7 +107,7 @@ impl SearchThread {
             self.expand(state.to_play(), &node, &state);
             let new_node = thread_rng().choose(node.get().children()).cloned().unwrap();
             node = new_node;
-            node.get_mut().data_mut().n += 1;
+            node.get_mut().data_mut().n.fetch_add(1, Ordering::Relaxed);
             state.play(node.get().data().get_move());
         }
         (node, state)
@@ -174,7 +181,7 @@ impl SearchThread {
             {
                 let mut node_lock = node.get_mut();
                 let mut data = node_lock.data_mut();
-                data.q += reward;
+                data.q.fetch_add(reward, Ordering::Relaxed);
             }
             reward = 1 - reward;
             let has_parent = node.get().parent().is_some();
@@ -192,7 +199,6 @@ pub struct MCTSPlayer {
     board: Board,
     tree: NodeRef<MCTSNode>,
     moves: Vec<Move>,
-    rng: ThreadRng,
 }
 
 impl MCTSPlayer {
@@ -201,7 +207,6 @@ impl MCTSPlayer {
             board: Board::new((13, 13)),
             tree: NodeRef::new(MCTSNode::new(Move::None)),
             moves: Vec::new(),
-            rng: rand::thread_rng(),
         }
     }
 
@@ -209,11 +214,11 @@ impl MCTSPlayer {
     fn best_move(&mut self) -> Move {
         // choose the node with the largest number of visits
         let node = self.tree.get();
-        let max = node.children().iter().map(|x| x.get().data().n).max().unwrap();
+        let max = node.children().iter().map(|x| x.get().data().n()).max().unwrap();
         let max_nodes = node.children()
                             .iter()
-                            .filter(|x| x.get().data().n == max);
-        let best_node = rand::sample(&mut self.rng, max_nodes, 1)[0];
+                            .filter(|x| x.get().data().n() == max);
+        let best_node = rand::sample(&mut thread_rng(), max_nodes, 1)[0];
         eprintln!("Win rate {}", best_node.get().data().win_rate());
         return best_node.get().data().get_move();
     }

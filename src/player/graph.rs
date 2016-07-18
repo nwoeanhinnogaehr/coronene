@@ -47,13 +47,24 @@ impl<T> Node<T> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct NodeRef<T>(Arc<UnsafeCell<Node<T>>>);
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct WeakNodeRef<T>(Weak<UnsafeCell<Node<T>>>);
 
 unsafe impl<T> Send for NodeRef<T> { }
 unsafe impl<T> Send for WeakNodeRef<T> { }
+
+impl<T> Clone for NodeRef<T> {
+    fn clone(&self) -> Self {
+        NodeRef(self.0.clone())
+    }
+}
+impl<T> Clone for WeakNodeRef<T> {
+    fn clone(&self) -> Self {
+        WeakNodeRef(self.0.clone())
+    }
+}
 
 impl<T> NodeRef<T> {
     pub fn new(data: T) -> NodeRef<T> {
