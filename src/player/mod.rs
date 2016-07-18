@@ -1,8 +1,9 @@
 macro_rules! eprintln(
-    ($($arg:tt)*) => {
+    ($($arg:tt)*) => { {
+        use std::io::Write;
         let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
         r.expect("failed printing to stderr");
-    }
+    } }
 );
 
 pub mod graph;
@@ -10,6 +11,7 @@ pub mod board;
 pub mod htp;
 //pub mod randomplayer;
 pub mod mctsplayer;
+pub mod misc;
 
 use self::board::{Board, Coord, Color, Move};
 

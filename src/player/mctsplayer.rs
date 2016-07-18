@@ -4,7 +4,6 @@ use super::graph::{NodeRef, Node};
 use std::f32;
 use time;
 use rand::{self, thread_rng, ThreadRng, Rng};
-use std::io::Write;
 use std::thread;
 
 const EXPLORATION: f32 = f32::consts::SQRT_2;
@@ -96,7 +95,7 @@ impl SearchThread {
             }
         }
         if state.winner().is_none() {
-            self.expand(state.to_play(), &node, &mut state);
+            self.expand(state.to_play(), &node, &state);
             let new_node = thread_rng().choose(node.get().children()).cloned().unwrap();
             node = new_node;
             state.play(node.get().data().get_move());
@@ -157,9 +156,9 @@ impl SearchThread {
     }
 
     fn expand(&mut self, color: Color, node: &NodeRef<MCTSNode>, state: &Board) {
-        for pos in state.empty_cells() {
-            node.add_child(NodeRef::new(MCTSNode::new(Move::new(color, pos))));
-        }
+        node.add_children(state.empty_cells()
+                               .map(|pos| NodeRef::new(MCTSNode::new(Move::new(color, pos))))
+                               .collect())
     }
 
     fn back_up(&mut self, mut node: NodeRef<MCTSNode>, outcome: Color) {
