@@ -8,7 +8,7 @@ use std::thread;
 
 const EXPLORATION: f32 = f32::consts::SQRT_2;
 const SEARCH_TIME: f32 = 1.0;
-const NUM_THREADS: usize = 2;
+const NUM_THREADS: usize = 4;
 
 #[derive(Clone, Debug)]
 struct MCTSNode {
@@ -76,6 +76,7 @@ impl SearchThread {
     fn select_node(&mut self) -> (NodeRef<MCTSNode>, Board) {
         let mut node = self.tree.clone();
         let mut state = self.board.clone();
+        node.get_mut().data_mut().n += 1;
         while node.get().children().len() != 0 {
             // find the child with the max value
             let mut max_node = node.get().children()[0].clone();
@@ -89,8 +90,9 @@ impl SearchThread {
             }
             node = max_node;
             state.play(node.get().data().get_move());
+            node.get_mut().data_mut().n += 1;
             // if it hasn't been visited, it's the one
-            if node.get().data().n == 0 {
+            if node.get().data().n == 1 {
                 return (node, state);
             }
         }
@@ -98,6 +100,7 @@ impl SearchThread {
             self.expand(state.to_play(), &node, &state);
             let new_node = thread_rng().choose(node.get().children()).cloned().unwrap();
             node = new_node;
+            node.get_mut().data_mut().n += 1;
             state.play(node.get().data().get_move());
         }
         (node, state)
@@ -171,7 +174,6 @@ impl SearchThread {
             {
                 let mut node_lock = node.get_mut();
                 let mut data = node_lock.data_mut();
-                data.n += 1;
                 data.q += reward;
             }
             reward = 1 - reward;
