@@ -13,9 +13,7 @@ pub struct AtomicInitVec<T> {
 
 impl<T> AtomicInitVec<T> {
     pub fn new() -> AtomicInitVec<T> {
-        AtomicInitVec {
-            ptr: AtomicPtr::new(ptr::null_mut()),
-        }
+        AtomicInitVec { ptr: AtomicPtr::new(ptr::null_mut()) }
     }
 
     /// Initialize the vector with the given items. If the vector already contains items, do
@@ -33,7 +31,8 @@ impl<T> AtomicInitVec<T> {
                 }
                 return false; // there's already items
             }
-            if self.ptr.compare_and_swap(ptr::null_mut(), items_ptr, Ordering::SeqCst) == ptr::null_mut() {
+            if self.ptr.compare_and_swap(ptr::null_mut(), items_ptr, Ordering::SeqCst) ==
+               ptr::null_mut() {
                 return true;
             }
         }
@@ -51,8 +50,23 @@ impl<T> AtomicInitVec<T> {
                 slice::from_raw_parts_mut(ptr::null_mut(), 0)
             }
         } else {
-            unsafe {
-                &mut (*ptr)
+            unsafe { &mut (*ptr) }
+        }
+    }
+}
+
+impl<T> Drop for AtomicInitVec<T> {
+    fn drop(&mut self) {
+        loop {
+            let ptr = self.ptr.load(Ordering::SeqCst);
+            if ptr == ptr::null_mut() {
+                return;
+            }
+            if self.ptr.compare_and_swap(ptr, ptr::null_mut(), Ordering::SeqCst) == ptr {
+                unsafe {
+                    mem::drop(Box::from_raw(ptr));
+                }
+                return;
             }
         }
     }
@@ -63,10 +77,10 @@ fn test_atomic_vec() {
     let av = AtomicInitVec::<usize>::new();
     assert_eq!(av.slice().len(), 0);
     assert_eq!(av.slice(), &[]);
-    assert!(av.init(vec![1,2,3,4,5,6]));
+    assert!(av.init(vec![1, 2, 3, 4, 5, 6]));
     assert_eq!(av.slice().len(), 6);
-    assert_eq!(av.slice(), &[1,2,3,4,5,6]);
-    assert!(!av.init(vec![4,3,2,1])); // cannot re-init
+    assert_eq!(av.slice(), &[1, 2, 3, 4, 5, 6]);
+    assert!(!av.init(vec![4, 3, 2, 1])); // cannot re-init
     assert_eq!(av.slice().len(), 6);
-    assert_eq!(av.slice(), &[1,2,3,4,5,6]);
+    assert_eq!(av.slice(), &[1, 2, 3, 4, 5, 6]);
 }
