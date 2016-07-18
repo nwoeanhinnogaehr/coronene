@@ -63,9 +63,10 @@ impl<T> NodeRef<T> {
     pub fn add_children(&self, children: Vec<NodeRef<T>>) {
         if !self.get_mut().children.init(children) {
             // TODO if here children were not added. pass this info up!
-        }
-        for child in self.get_mut().children() {
-            child.get_mut().parent = Some(WeakNodeRef(Arc::downgrade(&self.0.clone())));
+        } else {
+            for child in self.get_mut().children() {
+                child.get_mut().parent = Some(WeakNodeRef(Arc::downgrade(&self.0.clone())));
+            }
         }
     }
 

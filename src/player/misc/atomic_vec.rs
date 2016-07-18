@@ -27,13 +27,13 @@ impl<T> AtomicInitVec<T> {
         let items_ptr = Box::into_raw(Box::new(items));
 
         loop {
-            if self.ptr.load(Ordering::Relaxed) != ptr::null_mut() {
+            if self.ptr.load(Ordering::SeqCst) != ptr::null_mut() {
                 unsafe {
                     mem::drop(Box::from_raw(items_ptr));
                 }
                 return false; // there's already items
             }
-            if self.ptr.compare_and_swap(ptr::null_mut(), items_ptr, Ordering::Relaxed) == ptr::null_mut() {
+            if self.ptr.compare_and_swap(ptr::null_mut(), items_ptr, Ordering::SeqCst) == ptr::null_mut() {
                 return true;
             }
         }
@@ -44,7 +44,7 @@ impl<T> AtomicInitVec<T> {
     ///
     /// If the vector has not been initialized, this will return a zero length slice.
     pub fn slice(&self) -> &mut [T] {
-        let ptr = self.ptr.load(Ordering::Relaxed);
+        let ptr = self.ptr.load(Ordering::SeqCst);
         if ptr == ptr::null_mut() {
             unsafe {
                 // zero length slice probably doesn't need a valid ptr
