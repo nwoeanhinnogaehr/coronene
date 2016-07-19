@@ -50,7 +50,7 @@ impl Node<MCTSNode> {
             let parent_n = parent.get().data().n() as f32;
             let q = data.q() as f32;
             let n = data.n() as f32;
-            q / n + EXPLORATION * (2.0 * parent_n.ln() / n).sqrt()
+            q / n * 2.0 + EXPLORATION * (2.0 * parent_n.ln() / n).sqrt()
         }
     }
 }
