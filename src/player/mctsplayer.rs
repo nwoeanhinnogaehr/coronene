@@ -94,6 +94,8 @@ impl SearchThread {
             tree: tree,
         }
     }
+
+    /// Run Monte-Carlo search for the given number of seconds.
     fn search(&mut self, max_time: f32) {
         let start_time = time::precise_time_s();
         let mut num_rollouts = 0;
@@ -107,10 +109,14 @@ impl SearchThread {
         eprintln!("Num rollouts: {}", num_rollouts);
     }
 
+    /// Monte-Carlo selection process
     fn select_node(&mut self) -> (NodeRef<MCTSNode>, Board) {
         let mut node = self.tree.clone();
         let mut state = self.board.clone();
+
+        // virtual losses: visit node in selection process
         node.get().data().mc.visit(1);
+
         while node.get().children().len() != 0 {
             // find the child with the max value
             let mut max_node = node.get().children()[0].clone();
@@ -123,35 +129,46 @@ impl SearchThread {
                 }
             }
             node = max_node;
-            state.play(node.get().data().action);
-            node.get().data().mc.visit(1);
-            // if it hasn't been visited, it's the one
+
+            node.get().data().mc.visit(1); // virtual losses
+            state.play(node.get().data().action); // simulate the action associated with the move
+
+            // if it hasn't been visited yet, select it
             if node.get().data().mc.n() == 1 {
                 return (node, state);
             }
         }
+
+        // if this is not a leaf node (no winner), expand the tree.
         if state.winner().is_none() {
             self.expand(state.to_play(), &node, &state);
+            // choose a child randomly
             let new_node = thread_rng().choose(node.get().children()).cloned().unwrap();
             node = new_node;
-            node.get().data().mc.visit(1);
-            state.play(node.get().data().action);
+
+            node.get().data().mc.visit(1); // virtual losses
+            state.play(node.get().data().action); // simulate action
         }
+
         (node, state)
     }
 
+    /// Simulate a random game from a state and return the winner.
     fn roll_out(&mut self, state: &mut Board) -> Color {
         let mut empty_cells: Vec<Pos> = state.empty_cells().collect();
         loop {
+            // check for a must play
             let must_play = self.must_play(state);
             let m = match must_play {
                 Move::Resign => break,
                 Move::None => {
+                    // no must play, pick random move
                     let pos_idx = thread_rng().gen_range(0, empty_cells.len());
                     let pos = empty_cells.remove(pos_idx);
                     Move::new(state.to_play(), pos)
                 }
                 Move::Play { pos, color: _ } => {
+                    // must play, play it
                     let idx = empty_cells.iter().position(|&x| x == pos).unwrap();
                     empty_cells.remove(idx);
                     must_play
@@ -192,26 +209,31 @@ impl SearchThread {
         Move::None
     }
 
+    /// Adds all children (possible moves) to a node.
     fn expand(&mut self, color: Color, node: &NodeRef<MCTSNode>, state: &Board) {
         node.add_children(state.empty_cells()
                                .map(|pos| NodeRef::new(MCTSNode::new(Move::new(color, pos))))
                                .collect())
     }
 
+    /// Propagate roll out results back up the tree
     fn back_up(&mut self, mut node: NodeRef<MCTSNode>, outcome: Color) {
-        let mut reward = if outcome == node.get().data().action.color().unwrap() {
+        let mut reward = if Some(outcome) == node.get().data().action.color() {
             1
         } else {
             0
         };
         loop {
             node.get().data().mc.reward(reward);
-            reward = 1 - reward;
+            reward = 1 - reward; // flip reward for other player
+
             let has_parent = node.get().parent().is_some();
             if has_parent {
+                // move up the tree
                 let new_node = node.get().parent().unwrap().upgrade();
                 node = new_node;
             } else {
+                // at the root, done
                 break;
             }
         }
@@ -241,12 +263,14 @@ impl MCTSPlayer {
         let max_nodes = node.children()
                             .iter()
                             .filter(|x| x.get().data().mc.n() == max);
+        // pick a random move that has the max visits
         let best_node = rand::sample(&mut thread_rng(), max_nodes, 1)[0];
         eprintln!("Win rate {}", best_node.get().data().mc.mean());
         return best_node.get().data().action;
     }
 
     fn search(&mut self, max_time: f32) {
+        // spawn search threads
         let mut threads = Vec::new();
         for _ in 0..NUM_THREADS {
             let board = self.board.clone();
