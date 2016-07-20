@@ -3,7 +3,7 @@ use super::board::{Board, Color, Move, Coord, Pos};
 use super::graph::{NodeRef, Node};
 use std::f32;
 use time;
-use rand::{self, thread_rng, ThreadRng, Rng};
+use rand::{self, thread_rng, Rng};
 use std::thread;
 use std::sync::atomic::{AtomicIsize, Ordering};
 
@@ -12,34 +12,61 @@ const SEARCH_TIME: f32 = 1.0;
 const NUM_THREADS: usize = 4;
 
 #[derive(Debug)]
-struct MCTSNode {
-    m: Move,
+struct Stats {
     n: AtomicIsize,
     q: AtomicIsize,
 }
 
-impl MCTSNode {
-    pub fn new(m: Move) -> MCTSNode {
-        MCTSNode { m: m, n: AtomicIsize::new(0), q: AtomicIsize::new(0) }
+impl Stats {
+    pub fn new() -> Stats {
+        Stats {
+            n: AtomicIsize::new(0),
+            q: AtomicIsize::new(0),
+        }
     }
-    pub fn get_move(&self) -> Move {
-        self.m
-    }
-    pub fn win_rate(&self) -> f32 {
+
+    pub fn mean(&self) -> f32 {
         self.q() as f32 / self.n() as f32
     }
+
     pub fn n(&self) -> isize {
         self.n.load(Ordering::Relaxed)
     }
+
     pub fn q(&self) -> isize {
         self.q.load(Ordering::Relaxed)
+    }
+
+    pub fn visit(&self, num: isize) {
+        self.n.fetch_add(num, Ordering::Relaxed);
+    }
+
+    pub fn reward(&self, reward: isize) {
+        self.q.fetch_add(reward, Ordering::Relaxed);
+    }
+}
+
+#[derive(Debug)]
+struct MCTSNode {
+    action: Move,
+    mc: Stats,
+    rave: Stats,
+}
+
+impl MCTSNode {
+    pub fn new(action: Move) -> MCTSNode {
+        MCTSNode {
+            action: action,
+            mc: Stats::new(),
+            rave: Stats::new(),
+        }
     }
 }
 
 impl Node<MCTSNode> {
     pub fn value(&self) -> f32 {
         let data = self.data();
-        if data.n() == 0 {
+        if data.mc.n() == 0 {
             if EXPLORATION == 0.0 {
                 0.0
             } else {
@@ -47,9 +74,9 @@ impl Node<MCTSNode> {
             }
         } else {
             let parent = self.parent().unwrap().upgrade();
-            let parent_n = parent.get().data().n() as f32;
-            let q = data.q() as f32;
-            let n = data.n() as f32;
+            let parent_n = parent.get().data().mc.n() as f32;
+            let q = data.mc.q() as f32;
+            let n = data.mc.n() as f32;
             q / n * 2.0 + EXPLORATION * (2.0 * parent_n.ln() / n).sqrt()
         }
     }
@@ -83,7 +110,7 @@ impl SearchThread {
     fn select_node(&mut self) -> (NodeRef<MCTSNode>, Board) {
         let mut node = self.tree.clone();
         let mut state = self.board.clone();
-        node.get_mut().data_mut().n.fetch_add(1, Ordering::Relaxed);
+        node.get().data().mc.visit(1);
         while node.get().children().len() != 0 {
             // find the child with the max value
             let mut max_node = node.get().children()[0].clone();
@@ -96,10 +123,10 @@ impl SearchThread {
                 }
             }
             node = max_node;
-            state.play(node.get().data().get_move());
-            node.get_mut().data_mut().n.fetch_add(1, Ordering::Relaxed);
+            state.play(node.get().data().action);
+            node.get().data().mc.visit(1);
             // if it hasn't been visited, it's the one
-            if node.get().data().n() == 1 {
+            if node.get().data().mc.n() == 1 {
                 return (node, state);
             }
         }
@@ -107,8 +134,8 @@ impl SearchThread {
             self.expand(state.to_play(), &node, &state);
             let new_node = thread_rng().choose(node.get().children()).cloned().unwrap();
             node = new_node;
-            node.get_mut().data_mut().n.fetch_add(1, Ordering::Relaxed);
-            state.play(node.get().data().get_move());
+            node.get().data().mc.visit(1);
+            state.play(node.get().data().action);
         }
         (node, state)
     }
@@ -145,7 +172,7 @@ impl SearchThread {
 
         // save bridge
         let last_move = state.last_move();
-        if let Move::Play { pos, color } = last_move {
+        if let Move::Play { pos, color: _ } = last_move {
             let neighbor_patterns = &[(-1, 0), (0, -1), (1, -1), (1, 0), (0, 1), (-1, 1)];
             let num_pat = neighbor_patterns.len();
             let start = thread_rng().gen_range(0, num_pat);
@@ -172,17 +199,13 @@ impl SearchThread {
     }
 
     fn back_up(&mut self, mut node: NodeRef<MCTSNode>, outcome: Color) {
-        let mut reward = if outcome == node.get().data().get_move().color().unwrap() {
+        let mut reward = if outcome == node.get().data().action.color().unwrap() {
             1
         } else {
             0
         };
         loop {
-            {
-                let mut node_lock = node.get_mut();
-                let mut data = node_lock.data_mut();
-                data.q.fetch_add(reward, Ordering::Relaxed);
-            }
+            node.get().data().mc.reward(reward);
             reward = 1 - reward;
             let has_parent = node.get().parent().is_some();
             if has_parent {
@@ -214,13 +237,13 @@ impl MCTSPlayer {
     fn best_move(&mut self) -> Move {
         // choose the node with the largest number of visits
         let node = self.tree.get();
-        let max = node.children().iter().map(|x| x.get().data().n()).max().unwrap();
+        let max = node.children().iter().map(|x| x.get().data().mc.n()).max().unwrap();
         let max_nodes = node.children()
                             .iter()
-                            .filter(|x| x.get().data().n() == max);
+                            .filter(|x| x.get().data().mc.n() == max);
         let best_node = rand::sample(&mut thread_rng(), max_nodes, 1)[0];
-        eprintln!("Win rate {}", best_node.get().data().win_rate());
-        return best_node.get().data().get_move();
+        eprintln!("Win rate {}", best_node.get().data().mc.mean());
+        return best_node.get().data().action;
     }
 
     fn search(&mut self, max_time: f32) {
@@ -265,7 +288,7 @@ impl Player for MCTSPlayer {
                        .get()
                        .children()
                        .iter()
-                       .find(|x| x.get().data().get_move() == m)
+                       .find(|x| x.get().data().action == m)
                        .cloned();
         if let Some(new_root) = node {
             // if the move is in the tree, make it the new root
