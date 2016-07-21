@@ -30,19 +30,19 @@ impl Stats {
     }
 
     pub fn n(&self) -> isize {
-        self.n.load(Ordering::Relaxed)
+        self.n.load(Ordering::SeqCst)
     }
 
     pub fn q(&self) -> isize {
-        self.q.load(Ordering::Relaxed)
+        self.q.load(Ordering::SeqCst)
     }
 
     pub fn visit(&self, num: isize) {
-        self.n.fetch_add(num, Ordering::Relaxed);
+        self.n.fetch_add(num, Ordering::SeqCst);
     }
 
     pub fn reward(&self, reward: isize) {
-        self.q.fetch_add(reward, Ordering::Relaxed);
+        self.q.fetch_add(reward, Ordering::SeqCst);
     }
 }
 
@@ -105,7 +105,6 @@ impl SearchThread {
             self.back_up(node, outcome);
             num_rollouts += 1;
         }
-        eprintln!("Tree size: {}", self.tree.get().tree_size());
         eprintln!("Num rollouts: {}", num_rollouts);
     }
 
@@ -283,6 +282,7 @@ impl MCTSPlayer {
         for t in threads {
             t.join().unwrap();
         }
+        eprintln!("Tree size: {}", self.tree.get().tree_size());
     }
 
     fn clear_tree(&mut self) {
