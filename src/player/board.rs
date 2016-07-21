@@ -4,7 +4,7 @@ use bit_vec::{self, BitVec};
 use union_find::{UnionFind, UnionBySize, QuickUnionUf};
 use std::ops::Add;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Color {
     Black,
     White,
@@ -57,10 +57,10 @@ impl From<Color> for bool {
 
 pub type Coord = i8;
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, Eq, Hash)]
 pub struct Pos {
-    x: Coord,
-    y: Coord,
+    pub x: Coord,
+    pub y: Coord,
 }
 
 impl Pos {
@@ -120,7 +120,7 @@ impl Add for Pos {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, Eq, Hash)]
 pub enum Move {
     Resign,
     None,

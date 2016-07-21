@@ -6,10 +6,13 @@ use time;
 use rand::{self, thread_rng, Rng};
 use std::thread;
 use std::sync::atomic::{AtomicIsize, Ordering};
+use std::collections::HashSet;
+use std::hash::BuildHasherDefault;
+use fnv::FnvHasher;
 
 const EXPLORATION: f32 = f32::consts::SQRT_2;
 const SEARCH_TIME: f32 = 1.0;
-const NUM_THREADS: usize = 4;
+const NUM_THREADS: usize = 1;
 
 #[derive(Debug)]
 struct Stats {
@@ -26,7 +29,12 @@ impl Stats {
     }
 
     pub fn mean(&self) -> f32 {
-        self.q() as f32 / self.n() as f32
+        let n = self.n();
+        if n == 0 {
+            0.5 // TODO what should this be??
+        } else {
+            self.q() as f32 / n as f32
+        }
     }
 
     pub fn n(&self) -> isize {
@@ -75,9 +83,13 @@ impl Node<MCTSNode> {
         } else {
             let parent = self.parent().unwrap().upgrade();
             let parent_n = parent.get().data().mc.n() as f32;
-            let q = data.mc.q() as f32;
             let n = data.mc.n() as f32;
-            q / n * 2.0 + EXPLORATION * (2.0 * parent_n.ln() / n).sqrt()
+            let b = 0.5; // TODO tune this
+            let rave_n = data.rave.n() as f32;
+            let mc_n = data.mc.n() as f32;
+            let beta = rave_n / (mc_n + rave_n + 4.0 * mc_n * rave_n * b * b);
+            let q = (1.0 - beta) * data.mc.mean() + beta * data.rave.mean();
+            q * 2.0 - 1.0 + EXPLORATION * (2.0 * parent_n.ln() / n).sqrt()
         }
     }
 }
@@ -102,7 +114,7 @@ impl SearchThread {
         while time::precise_time_s() - start_time < max_time as f64 {
             let (node, mut state) = self.select_node();
             let outcome = self.roll_out(&mut state);
-            self.back_up(node, outcome);
+            self.back_up(node, outcome, &state);
             num_rollouts += 1;
         }
         eprintln!("Num rollouts: {}", num_rollouts);
@@ -216,7 +228,20 @@ impl SearchThread {
     }
 
     /// Propagate roll out results back up the tree
-    fn back_up(&mut self, mut node: NodeRef<MCTSNode>, outcome: Color) {
+    fn back_up(&mut self, mut node: NodeRef<MCTSNode>, outcome: Color, endgame: &Board) {
+
+        // RAVE needs to keep track of all visited actions
+        let hasher = BuildHasherDefault::<FnvHasher>::default();
+        let mut actions = HashSet::with_hasher(hasher);
+        // TODO board iterator cleanup
+        for x in 0..endgame.dimensions().x {
+            for y in 0..endgame.dimensions().y {
+                if let Some(color) = endgame.get((x, y)) {
+                    actions.insert(Move::new(color, (x, y)));
+                }
+            }
+        }
+
         let mut reward = if Some(outcome) == node.get().data().action.color() {
             1
         } else {
@@ -224,7 +249,7 @@ impl SearchThread {
         };
         loop {
             node.get().data().mc.reward(reward);
-            reward = 1 - reward; // flip reward for other player
+            actions.insert(node.get().data().action);
 
             let has_parent = node.get().parent().is_some();
             if has_parent {
@@ -232,9 +257,18 @@ impl SearchThread {
                 let new_node = node.get().parent().unwrap().upgrade();
                 node = new_node;
             } else {
-                // at the root, done
                 break;
             }
+
+            // RAVE
+            for child in node.get().children() {
+                if actions.contains(&child.get().data().action) {
+                    child.get().data().rave.visit(1);
+                    child.get().data().rave.reward(reward);
+                }
+            }
+
+            reward = 1 - reward; // flip reward for other player
         }
     }
 }
@@ -265,6 +299,7 @@ impl MCTSPlayer {
         // pick a random move that has the max visits
         let best_node = rand::sample(&mut thread_rng(), max_nodes, 1)[0];
         eprintln!("Win rate {}", best_node.get().data().mc.mean());
+        eprintln!("RAVE win rate {}", best_node.get().data().rave.mean());
         return best_node.get().data().action;
     }
 

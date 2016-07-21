@@ -4,6 +4,7 @@ extern crate rand;
 extern crate time;
 extern crate bit_vec;
 extern crate union_find;
+extern crate fnv;
 
 mod player;
 
