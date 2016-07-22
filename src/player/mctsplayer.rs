@@ -223,7 +223,7 @@ impl SearchThread {
     fn expand(&mut self, color: Color, node: &NodeRef<MCTSNode>, state: &Board) {
         node.add_children(state.iter_empty()
                                .map(|pos| NodeRef::new(MCTSNode::new(Move::new(color, pos))))
-                               .collect())
+                               .collect());
     }
 
     /// Propagate roll out results back up the tree
