@@ -293,6 +293,7 @@ impl MCTSPlayer {
         let best_node = rand::sample(&mut thread_rng(), max_nodes, 1)[0];
         eprintln!("Win rate {}", best_node.get().data().mc.mean());
         eprintln!("RAVE win rate {}", best_node.get().data().rave.mean());
+        self.tree.render("tree.dot".into());
         return best_node.get().data().action;
     }
 
