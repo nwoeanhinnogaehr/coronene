@@ -31,14 +31,6 @@ impl<T> Node<T> {
         self.parent = None;
     }
 
-    pub fn data(&self) -> &T {
-        &self.data
-    }
-
-    pub fn data_mut(&mut self) -> &mut T {
-        &mut self.data
-    }
-
     pub fn tree_size(&self) -> usize {
         let mut sum = 0;
         for child in self.children() {

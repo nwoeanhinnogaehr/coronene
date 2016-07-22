@@ -73,8 +73,7 @@ impl MCTSNode {
 
 impl Node<MCTSNode> {
     pub fn value(&self) -> f32 {
-        let data = self.data();
-        if data.mc.n() == 0 {
+        if self.mc.n() == 0 {
             if EXPLORATION == 0.0 {
                 0.0
             } else {
@@ -83,12 +82,12 @@ impl Node<MCTSNode> {
         } else {
             let parent = self.parent().unwrap().upgrade();
             let parent_n = parent.mc.n() as f32;
-            let n = data.mc.n() as f32;
+            let n = self.mc.n() as f32;
             let b = 0.5; // TODO tune this
-            let rave_n = data.rave.n() as f32;
-            let mc_n = data.mc.n() as f32;
+            let rave_n = self.rave.n() as f32;
+            let mc_n = self.mc.n() as f32;
             let beta = rave_n / (mc_n + rave_n + 4.0 * mc_n * rave_n * b * b);
-            let q = (1.0 - beta) * data.mc.mean() + beta * data.rave.mean();
+            let q = (1.0 - beta) * self.mc.mean() + beta * self.rave.mean();
             q * 2.0 - 1.0 + EXPLORATION * (2.0 * parent_n.ln() / n).sqrt()
         }
     }
@@ -241,8 +240,8 @@ impl SearchThread {
             0
         };
         loop {
-            node.data().mc.reward(reward);
-            actions.insert(node.data().action);
+            node.mc.reward(reward);
+            actions.insert(node.action);
 
             let has_parent = node.parent().is_some();
             if has_parent {
