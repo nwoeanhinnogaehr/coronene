@@ -166,7 +166,7 @@ impl SearchThread {
 
     /// Simulate a random game from a state and return the winner.
     fn roll_out(&mut self, state: &mut Board) -> Color {
-        let mut empty_cells: Vec<Pos> = state.empty_cells().collect();
+        let mut empty_cells: Vec<Pos> = state.iter_empty().collect();
         loop {
             // check for a must play
             let must_play = self.must_play(state);
@@ -222,7 +222,7 @@ impl SearchThread {
 
     /// Adds all children (possible moves) to a node.
     fn expand(&mut self, color: Color, node: &NodeRef<MCTSNode>, state: &Board) {
-        node.add_children(state.empty_cells()
+        node.add_children(state.iter_empty()
                                .map(|pos| NodeRef::new(MCTSNode::new(Move::new(color, pos))))
                                .collect())
     }
@@ -233,14 +233,7 @@ impl SearchThread {
         // RAVE needs to keep track of all visited actions
         let hasher = BuildHasherDefault::<FnvHasher>::default();
         let mut actions = HashSet::with_hasher(hasher);
-        // TODO board iterator cleanup
-        for x in 0..endgame.dimensions().x {
-            for y in 0..endgame.dimensions().y {
-                if let Some(color) = endgame.get((x, y)) {
-                    actions.insert(Move::new(color, (x, y)));
-                }
-            }
-        }
+        actions.extend(endgame.iter_filled());
 
         let mut reward = if Some(outcome) == node.get().data().action.color() {
             1

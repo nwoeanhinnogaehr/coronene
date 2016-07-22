@@ -1,6 +1,6 @@
 use std::fmt;
 use std::str::FromStr;
-use bit_vec::{self, BitVec};
+use bit_vec::{BitVec};
 use union_find::{UnionFind, UnionBySize, QuickUnionUf};
 use std::ops::Add;
 
@@ -223,12 +223,30 @@ impl Board {
         }
     }
 
-    pub fn empty_cells<'a>(&'a self) -> Iter<'a> {
-        Iter {
-            iter: self.empty_cells.iter(),
-            idx: 0,
-            dims: self.dims,
-        }
+    pub fn iter_empty<'a>(&'a self) -> Box<Iterator<Item = Pos> + 'a> {
+        Box::new(self.empty_cells
+                     .iter()
+                     .enumerate()
+                     .filter_map(move |(idx, state)| {
+                         match state {
+                             true => Some(self.pos_of(idx)),
+                             false => None,
+                         }
+                     }))
+    }
+
+    pub fn iter_filled<'a>(&'a self) -> Box<Iterator<Item = Move> + 'a> {
+        Box::new(self.empty_cells
+                     .iter()
+                     .map(|x| !x) // flip empty to filled
+                     .zip(self.colors.iter().map(|x| x.into())) // zip with color
+                     .enumerate()
+                     .filter_map(move |(idx, (state, color))| {
+                         match state {
+                             true => Some(Move::new(color, self.pos_of(idx))),
+                             false => None,
+                         }
+                     }))
     }
 
     pub fn winner(&self) -> Option<Color> {
@@ -306,7 +324,7 @@ impl Board {
         let pos = pos.into();
         let idx = match self.idx_of(pos) {
             Some(idx) => idx,
-            None => return false
+            None => return false,
         };
 
         self.empty_cells.set(idx, val.is_none());
@@ -356,6 +374,12 @@ impl Board {
         }
     }
 
+    fn pos_of(&self, idx: usize) -> Pos {
+        ((idx % self.dims.x as usize) as Coord,
+         (idx / self.dims.y as usize) as Coord)
+            .into()
+    }
+
     fn edge_idx(&self, edge: usize) -> usize {
         self.dims.area() + edge
     }
@@ -392,29 +416,5 @@ impl fmt::Display for Board {
             try!(write!(f, "{} ", (x + 'a' as Coord) as u8 as char));
         }
         Ok(())
-    }
-}
-
-pub struct Iter<'a> {
-    iter: bit_vec::Iter<'a>,
-    idx: usize,
-    dims: Pos,
-}
-
-impl<'a> Iterator for Iter<'a> {
-    type Item = Pos;
-
-    fn next(&mut self) -> Option<Pos> {
-        while let Some(val) = self.iter.next() {
-            if val {
-                let res = Some(((self.idx % self.dims.x as usize) as Coord,
-                                (self.idx / self.dims.y as usize) as Coord)
-                                   .into());
-                self.idx += 1;
-                return res;
-            }
-            self.idx += 1;
-        }
-        None
     }
 }
