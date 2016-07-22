@@ -1,6 +1,7 @@
 use std::sync::{Arc, Weak};
 use super::misc::atomic_vec::AtomicInitVec;
 use std::cell::UnsafeCell;
+use std::ops::{Deref, DerefMut};
 
 #[derive(Debug)]
 pub struct Node<T> {
@@ -22,7 +23,7 @@ impl<T> Node<T> {
         self.parent.as_ref()
     }
 
-    pub fn children(&self) -> &[NodeRef<T>] {
+    pub fn children(&self) -> &mut [NodeRef<T>] {
         self.children.slice()
     }
 
@@ -41,9 +42,22 @@ impl<T> Node<T> {
     pub fn tree_size(&self) -> usize {
         let mut sum = 0;
         for child in self.children() {
-            sum += 1 + child.get().tree_size();
+            sum += 1 + child.tree_size();
         }
         sum
+    }
+}
+
+impl<T> Deref for Node<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<T> DerefMut for Node<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
     }
 }
 
@@ -72,24 +86,12 @@ impl<T> NodeRef<T> {
     }
 
     pub fn add_children(&self, children: Vec<NodeRef<T>>) {
-        if !self.get_mut().children.init(children) {
+        if !self.children.init(children) {
             // TODO if here children were not added. pass this info up!
         } else {
-            for child in self.get_mut().children() {
-                child.get_mut().parent = Some(WeakNodeRef(Arc::downgrade(&self.0.clone())));
+            for child in self.children() {
+                child.parent = Some(WeakNodeRef(Arc::downgrade(&self.0.clone())));
             }
-        }
-    }
-
-    pub fn get(&self) -> &Node<T> {
-        unsafe {
-            &*self.0.get()
-        }
-    }
-
-    pub fn get_mut(&self) -> &mut Node<T> {
-        unsafe {
-            &mut *self.0.get()
         }
     }
 }
@@ -97,5 +99,22 @@ impl<T> NodeRef<T> {
 impl<T> WeakNodeRef<T> {
     pub fn upgrade(&self) -> NodeRef<T> {
         NodeRef(self.0.upgrade().unwrap())
+    }
+}
+
+impl<T> Deref for NodeRef<T> {
+    type Target = Node<T>;
+    fn deref(&self) -> &Self::Target {
+        unsafe {
+            &*self.0.get()
+        }
+    }
+}
+
+impl<T> DerefMut for NodeRef<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe {
+            &mut *self.0.get()
+        }
     }
 }

@@ -82,7 +82,7 @@ impl Node<MCTSNode> {
             }
         } else {
             let parent = self.parent().unwrap().upgrade();
-            let parent_n = parent.get().data().mc.n() as f32;
+            let parent_n = parent.mc.n() as f32;
             let n = data.mc.n() as f32;
             let b = 0.5; // TODO tune this
             let rave_n = data.rave.n() as f32;
@@ -126,14 +126,14 @@ impl SearchThread {
         let mut state = self.board.clone();
 
         // virtual losses: visit node in selection process
-        node.get().data().mc.visit(1);
+        node.mc.visit(1);
 
-        while node.get().children().len() != 0 {
+        while node.children().len() != 0 {
             // find the child with the max value
-            let mut max_node = node.get().children()[0].clone();
+            let mut max_node = node.children()[0].clone();
             let mut max_value = f32::NEG_INFINITY;
-            for child in node.get().children() {
-                let child_value = child.get().value();
+            for child in node.children() {
+                let child_value = child.value();
                 if child_value > max_value {
                     max_node = child.clone();
                     max_value = child_value;
@@ -141,11 +141,11 @@ impl SearchThread {
             }
             node = max_node;
 
-            node.get().data().mc.visit(1); // virtual losses
-            state.play(node.get().data().action); // simulate the action associated with the move
+            node.mc.visit(1); // virtual losses
+            state.play(node.action); // simulate the action associated with the move
 
             // if it hasn't been visited yet, select it
-            if node.get().data().mc.n() == 1 {
+            if node.mc.n() == 1 {
                 return (node, state);
             }
         }
@@ -154,11 +154,11 @@ impl SearchThread {
         if state.winner().is_none() {
             self.expand(state.to_play(), &node, &state);
             // choose a child randomly
-            let new_node = thread_rng().choose(node.get().children()).cloned().unwrap();
+            let new_node = thread_rng().choose(node.children()).cloned().unwrap();
             node = new_node;
 
-            node.get().data().mc.visit(1); // virtual losses
-            state.play(node.get().data().action); // simulate action
+            node.mc.visit(1); // virtual losses
+            state.play(node.action); // simulate action
         }
 
         (node, state)
@@ -235,29 +235,29 @@ impl SearchThread {
         let mut actions = HashSet::with_hasher(hasher);
         actions.extend(endgame.iter_filled());
 
-        let mut reward = if Some(outcome) == node.get().data().action.color() {
+        let mut reward = if Some(outcome) == node.action.color() {
             1
         } else {
             0
         };
         loop {
-            node.get().data().mc.reward(reward);
-            actions.insert(node.get().data().action);
+            node.data().mc.reward(reward);
+            actions.insert(node.data().action);
 
-            let has_parent = node.get().parent().is_some();
+            let has_parent = node.parent().is_some();
             if has_parent {
                 // move up the tree
-                let new_node = node.get().parent().unwrap().upgrade();
+                let new_node = node.parent().unwrap().upgrade();
                 node = new_node;
             } else {
                 break;
             }
 
             // RAVE
-            for child in node.get().children() {
-                if actions.contains(&child.get().data().action) {
-                    child.get().data().rave.visit(1);
-                    child.get().data().rave.reward(reward);
+            for child in node.children() {
+                if actions.contains(&child.action) {
+                    child.rave.visit(1);
+                    child.rave.reward(reward);
                 }
             }
 
@@ -284,16 +284,16 @@ impl MCTSPlayer {
     /// Return the best move according to the current search tree.
     fn best_move(&mut self) -> Move {
         // choose the node with the largest number of visits
-        let node = self.tree.get();
-        let max = node.children().iter().map(|x| x.get().data().mc.n()).max().unwrap();
+        let node = self.tree.clone();
+        let max = node.children().iter().map(|x| x.mc.n()).max().unwrap();
         let max_nodes = node.children()
                             .iter()
-                            .filter(|x| x.get().data().mc.n() == max);
+                            .filter(|x| x.mc.n() == max);
         // pick a random move that has the max visits
         let best_node = rand::sample(&mut thread_rng(), max_nodes, 1)[0];
-        eprintln!("Win rate {}", best_node.get().data().mc.mean());
-        eprintln!("RAVE win rate {}", best_node.get().data().rave.mean());
-        return best_node.get().data().action;
+        eprintln!("Win rate {}", best_node.mc.mean());
+        eprintln!("RAVE win rate {}", best_node.rave.mean());
+        return best_node.action;
     }
 
     fn search(&mut self, max_time: f32) {
@@ -310,7 +310,7 @@ impl MCTSPlayer {
         for t in threads {
             t.join().unwrap();
         }
-        eprintln!("Tree size: {}", self.tree.get().tree_size());
+        eprintln!("Tree size: {}", self.tree.tree_size());
     }
 
     fn clear_tree(&mut self) {
@@ -337,14 +337,13 @@ impl Player for MCTSPlayer {
     /// Force a move.
     fn play_move(&mut self, m: Move) -> bool {
         let node = self.tree
-                       .get()
                        .children()
                        .iter()
-                       .find(|x| x.get().data().action == m)
+                       .find(|x| x.action == m)
                        .cloned();
-        if let Some(new_root) = node {
+        if let Some(mut new_root) = node {
             // if the move is in the tree, make it the new root
-            new_root.get_mut().orphan();
+            new_root.orphan();
             self.tree = new_root;
         } else {
             // otherwise, make a new root
