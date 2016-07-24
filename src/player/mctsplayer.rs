@@ -231,7 +231,7 @@ impl SearchThread {
 
         // RAVE needs to keep track of all visited actions
         let hasher = BuildHasherDefault::<FnvHasher>::default();
-        let mut actions = HashSet::with_hasher(hasher);
+        let mut actions = HashSet::with_capacity_and_hasher(endgame.dimensions().area(), hasher);
         actions.extend(endgame.iter_filled());
 
         let mut reward = if Some(outcome) == node.action.color() {
