@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use std::hash::BuildHasherDefault;
 use fnv::FnvHasher;
 
-const EXPLORATION: f32 = f32::consts::SQRT_2;
+const EXPLORATION: f32 = 0.1;
 const SEARCH_TIME: f32 = 1.0;
 const NUM_THREADS: usize = 1;
 
@@ -73,7 +73,8 @@ impl MCTSNode {
 
 impl Node<MCTSNode> {
     pub fn value(&self) -> f32 {
-        if self.mc.n() == 0 {
+        let mc_n = self.mc.n();
+        if mc_n == 0 {
             if EXPLORATION == 0.0 {
                 0.0
             } else {
@@ -82,13 +83,16 @@ impl Node<MCTSNode> {
         } else {
             let parent = self.parent().unwrap().upgrade();
             let parent_n = parent.mc.n() as f32;
-            let n = self.mc.n() as f32;
-            let b = 0.5; // TODO tune this
+            let rave_q = self.rave.q() as f32;
+            let mc_q = self.mc.q() as f32;
             let rave_n = self.rave.n() as f32;
-            let mc_n = self.mc.n() as f32;
+            let mc_n = mc_n as f32;
+            let mc_mean = mc_q / mc_n;
+            let rave_mean = rave_q / rave_n;
+            let b = 3.0; // TODO tune this
             let beta = rave_n / (mc_n + rave_n + 4.0 * mc_n * rave_n * b * b);
-            let q = (1.0 - beta) * self.mc.mean() + beta * self.rave.mean();
-            q * 2.0 - 1.0 + EXPLORATION * (2.0 * parent_n.ln() / n).sqrt()
+            let q = (1.0 - beta) * mc_mean + beta * rave_mean;
+            q * 2.0 + EXPLORATION * (2.0 * parent_n.ln() / mc_n).sqrt()
         }
     }
 }
