@@ -89,7 +89,7 @@ impl Node<MCTSNode> {
             let mc_n = mc_n as f32;
             let mc_mean = mc_q / mc_n;
             let rave_mean = rave_q / rave_n;
-            let b = 3.0; // TODO tune this
+            let b = 0.0; // TODO tune this
             let beta = rave_n / (mc_n + rave_n + 4.0 * mc_n * rave_n * b * b);
             let q = (1.0 - beta) * mc_mean + beta * rave_mean;
             q * 2.0 + EXPLORATION * (2.0 * parent_n.ln() / mc_n).sqrt()
