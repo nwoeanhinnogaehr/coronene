@@ -77,15 +77,11 @@ impl<T> NodeRef<T> {
         NodeRef(Arc::new(UnsafeCell::new(Node::new(data))))
     }
 
-    pub fn add_children(&self, children: Vec<NodeRef<T>>) -> bool {
-        if !self.children.init(children) {
-            false
-        } else {
-            for child in self.children() {
-                child.parent = Some(WeakNodeRef(Arc::downgrade(&self.0.clone())));
-            }
-            true
+    pub fn add_children(&self, mut children: Vec<NodeRef<T>>) -> bool {
+        for child in &mut children {
+            child.parent = Some(WeakNodeRef(Arc::downgrade(&self.0.clone())));
         }
+        self.children.init(children)
     }
 }
 

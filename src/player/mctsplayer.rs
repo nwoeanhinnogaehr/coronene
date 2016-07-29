@@ -12,7 +12,7 @@ use fnv::FnvHasher;
 
 const EXPLORATION: f32 = 0.1;
 const SEARCH_TIME: f32 = 1.0;
-const NUM_THREADS: usize = 1;
+const NUM_THREADS: usize = 4;
 
 #[derive(Debug)]
 struct Stats {
@@ -259,8 +259,8 @@ impl SearchThread {
             // RAVE
             for child in node.children() {
                 if actions.contains(&child.action) {
-                    child.rave.visit(1);
                     child.rave.reward(reward);
+                    child.rave.visit(1);
                 }
             }
 
