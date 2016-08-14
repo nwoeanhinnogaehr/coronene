@@ -133,12 +133,12 @@ pub enum Move {
 impl Move {
     pub fn new<P>(color: Color, pos: P) -> Move
         where P: Into<Pos>
-    {
-        Move::Play {
-            color: color,
-            pos: pos.into(),
+        {
+            Move::Play {
+                color: color,
+                pos: pos.into(),
+            }
         }
-    }
 
     pub fn pos(&self) -> Option<Pos> {
         if let &Move::Play { color: _, pos } = self {
@@ -198,15 +198,15 @@ impl Board {
 
     pub fn is_empty<P>(&self, pos: P) -> bool
         where P: Into<Pos>
-    {
-        self.get(pos) == None
-    }
+        {
+            self.get(pos) == None
+        }
 
     pub fn clear_cell<P>(&mut self, pos: P)
         where P: Into<Pos>
-    {
-        self.set(pos, None);
-    }
+        {
+            self.set(pos, None);
+        }
 
     pub fn play(&mut self, m: Move) -> bool {
         match m {
@@ -223,30 +223,30 @@ impl Board {
         }
     }
 
-    pub fn iter_empty<'a>(&'a self) -> Box<Iterator<Item = Pos> + 'a> {
-        Box::new(self.empty_cells
-                     .iter()
-                     .enumerate()
-                     .filter_map(move |(idx, state)| {
-                         match state {
-                             true => Some(self.pos_of(idx)),
-                             false => None,
-                         }
-                     }))
+    pub fn iter_empty<'a>(&'a self) -> impl Iterator<Item = Pos> + 'a {
+        self.empty_cells
+            .iter()
+            .enumerate()
+            .filter_map(move |(idx, state)| {
+                match state {
+                    true => Some(self.pos_of(idx)),
+                    false => None,
+                }
+            })
     }
 
-    pub fn iter_filled<'a>(&'a self) -> Box<Iterator<Item = Move> + 'a> {
-        Box::new(self.empty_cells
-                     .iter()
-                     .map(|x| !x) // flip empty to filled
-                     .zip(self.colors.iter().map(|x| x.into())) // zip with color
-                     .enumerate()
-                     .filter_map(move |(idx, (state, color))| {
-                         match state {
-                             true => Some(Move::new(color, self.pos_of(idx))),
-                             false => None,
-                         }
-                     }))
+    pub fn iter_filled<'a>(&'a self) -> impl Iterator<Item = Move> + 'a {
+        self.empty_cells
+            .iter()
+            .map(|x| !x) // flip empty to filled
+            .zip(self.colors.iter().map(|x| x.into())) // zip with color
+            .enumerate()
+            .filter_map(move |(idx, (state, color))| {
+                match state {
+                    true => Some(Move::new(color, self.pos_of(idx))),
+                    false => None,
+                }
+            })
     }
 
     pub fn winner(&self) -> Option<Color> {
@@ -255,10 +255,10 @@ impl Board {
 
     pub fn on_board<P>(&self, pos: P) -> bool
         where P: Into<Pos>
-    {
-        let pos = pos.into();
-        pos.x >= 0 && pos.y >= 0 && pos.x < self.dims.x && pos.y < self.dims.y
-    }
+        {
+            let pos = pos.into();
+            pos.x >= 0 && pos.y >= 0 && pos.x < self.dims.x && pos.y < self.dims.y
+        }
 
     pub fn get<P: Into<Pos>>(&self, pos: P) -> Option<Color> {
         let pos = pos.into();
@@ -376,7 +376,7 @@ impl Board {
 
     fn pos_of(&self, idx: usize) -> Pos {
         ((idx % self.dims.x as usize) as Coord,
-         (idx / self.dims.y as usize) as Coord)
+        (idx / self.dims.y as usize) as Coord)
             .into()
     }
 

@@ -1,4 +1,5 @@
 #![feature(slice_patterns)]
+#![feature(conservative_impl_trait)]
 
 extern crate rand;
 extern crate time;
